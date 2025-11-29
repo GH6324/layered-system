@@ -30,7 +30,7 @@ pub fn run_diskpart_script(script_path: &Path) -> Result<CommandOutput> {
 pub fn base_diskpart_script(
     vhd_path: &Path,
     size_gb: u64,
-    efi_mount: &Path,
+    efi_letter: &str,
     sys_mount: &Path,
 ) -> String {
     let size_mb = size_gb * 1024;
@@ -42,7 +42,7 @@ attach vdisk
 convert gpt
 create partition efi size=100
 format quick fs=fat32 label="EFI"
-assign mount="{efi_mount}"
+assign letter={efi_letter}
 create partition msr size=16
 create partition primary
 format quick fs=ntfs label="System"
@@ -52,7 +52,7 @@ list partition
 "#,
         vhd = vhd_path.display(),
         size_mb = size_mb,
-        efi_mount = efi_mount.display(),
+        efi_letter = efi_letter,
         sys_mount = sys_mount.display()
     )
 }
@@ -61,7 +61,7 @@ list partition
 pub fn diff_diskpart_script(
     child: &Path,
     parent: &Path,
-    efi_mount: &Path,
+    efi_letter: &str,
     sys_mount: &Path,
 ) -> String {
     format!(
@@ -72,13 +72,13 @@ attach vdisk
 select partition 3
 assign mount="{sys_mount}"
 select partition 1
-assign mount="{efi_mount}"
+assign letter={efi_letter}
 list volume
 list partition
 "#,
         child = child.display(),
         parent = parent.display(),
-        efi_mount = efi_mount.display(),
+        efi_letter = efi_letter,
         sys_mount = sys_mount.display()
     )
 }

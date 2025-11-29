@@ -98,36 +98,31 @@ impl<'a> WorkspaceService<'a> {
 
         let temp = TempManager::new(paths.tmp_dir())?;
         fs::create_dir_all(paths.mount_root())?;
-        let efi_mount = paths.mount_root().join("efi");
+        let efi_letter = pick_drive_letter()?;
+        let efi_mount = PathBuf::from(format!("{efi_letter}:"));
         let sys_mount = paths.mount_root().join(format!("sys-{id}"));
-        fs::create_dir_all(&efi_mount)?;
         fs::create_dir_all(&sys_mount)?;
 
-        let script = base_diskpart_script(&vhd_path, size_gb, &efi_mount, &sys_mount);
+        let script = base_diskpart_script(&vhd_path, size_gb, &efi_letter, &sys_mount);
         let script_path = temp.write_script("create_base.txt", &script)?;
         let create_res = run_diskpart_script(&script_path)?;
 
         if create_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "diskpart failed: {}",
-                create_res.stderr
-            )));
+            return Err(command_error(
+                "diskpart create base",
+                &create_res,
+                Some(&script_path),
+            ));
         }
 
         let dism_res = apply_image(wim_file, wim_index, sys_mount.to_str().unwrap_or_default())?;
         if dism_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "dism failed: {}",
-                dism_res.stderr
-            )));
+            return Err(command_error("dism apply", &dism_res, None));
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "bcdboot failed: {}",
-                bcd_res.stderr
-            )));
+            return Err(command_error("bcdboot", &bcd_res, None));
         }
 
         let bcd_enum = bcdedit_enum_all()?;
@@ -182,27 +177,25 @@ impl<'a> WorkspaceService<'a> {
 
         let temp = TempManager::new(paths.tmp_dir())?;
         let sys_mount = paths.mount_root().join(format!("sys-{id}"));
-        let efi_mount = paths.mount_root().join("efi");
+        let efi_letter = pick_drive_letter()?;
+        let efi_mount = PathBuf::from(format!("{efi_letter}:"));
         fs::create_dir_all(&sys_mount)?;
-        fs::create_dir_all(&efi_mount)?;
 
         let script =
-            diff_diskpart_script(&vhd_path, Path::new(&parent.path), &efi_mount, &sys_mount);
+            diff_diskpart_script(&vhd_path, Path::new(&parent.path), &efi_letter, &sys_mount);
         let script_path = temp.write_script("create_diff.txt", &script)?;
         let res = run_diskpart_script(&script_path)?;
         if res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "diskpart failed: {}",
-                res.stderr
-            )));
+            return Err(command_error(
+                "diskpart create diff",
+                &res,
+                Some(&script_path),
+            ));
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "bcdboot failed: {}",
-                bcd_res.stderr
-            )));
+            return Err(command_error("bcdboot", &bcd_res, None));
         }
         let bcd_enum = bcdedit_enum_all()?;
         let guid = extract_guid_for_vhd(&bcd_enum.stdout, vhd_path.to_str().unwrap_or_default())
@@ -333,18 +326,16 @@ impl<'a> WorkspaceService<'a> {
         let attach_path = temp.write_script("attach_repair.txt", &attach_script)?;
         let attach_res = run_diskpart_script(&attach_path)?;
         if attach_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "diskpart failed: {}",
-                attach_res.stderr
-            )));
+            return Err(command_error(
+                "diskpart attach",
+                &attach_res,
+                Some(&attach_path),
+            ));
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "bcdboot failed: {}",
-                bcd_res.stderr
-            )));
+            return Err(command_error("bcdboot", &bcd_res, None));
         }
         let bcd_enum = bcdedit_enum_all()?;
         let guid = extract_guid_for_vhd(&bcd_enum.stdout, &node.path);
@@ -379,10 +370,7 @@ impl<'a> WorkspaceService<'a> {
         let script_path = temp.write_script("detail_vdisk.txt", &script)?;
         let res = run_diskpart_script(&script_path)?;
         if res.exit_code.unwrap_or(-1) != 0 {
-            return Err(AppError::Message(format!(
-                "diskpart failed: {}",
-                res.stderr
-            )));
+            return Err(command_error("diskpart detail", &res, Some(&script_path)));
         }
         Ok(parse_detail_vdisk_parent(&res.stdout))
     }
@@ -393,4 +381,44 @@ fn bcdedit_boot_sequence_and_reboot(guid: &str) -> Result<CommandOutput> {
     // Reboot immediately
     let _ = run_elevated_command("shutdown", &["/r", "/t", "0"], None);
     Ok(res)
+}
+
+fn command_error(name: &str, output: &CommandOutput, script: Option<&Path>) -> AppError {
+    let mut parts = Vec::new();
+    if let Some(code) = output.exit_code {
+        parts.push(format!("exit={code}"));
+    }
+    if let Some(script) = script {
+        parts.push(format!("script={}", script.display()));
+    }
+    let stderr = output.stderr.trim();
+    let stdout = output.stdout.trim();
+    if !stderr.is_empty() {
+        parts.push(format!("stderr={}", truncate(stderr, 800)));
+    } else if !stdout.is_empty() {
+        parts.push(format!("stdout={}", truncate(stdout, 800)));
+    } else {
+        parts.push("no output".into());
+    }
+    AppError::Message(format!("{name} failed: {}", parts.join(" | ")))
+}
+
+fn pick_drive_letter() -> Result<String> {
+    for letter in 'S'..='Z' {
+        let candidate = format!("{}:\\", letter);
+        if !Path::new(&candidate).exists() {
+            return Ok(letter.to_string());
+        }
+    }
+    Err(AppError::Message(
+        "no free drive letter available between S: and Z:".into(),
+    ))
+}
+
+fn truncate(text: &str, max: usize) -> String {
+    if text.len() > max {
+        format!("{}...", &text[..max])
+    } else {
+        text.to_string()
+    }
 }
