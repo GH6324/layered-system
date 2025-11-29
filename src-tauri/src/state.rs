@@ -6,7 +6,7 @@ use std::{
 use crate::{
     db::{AppSettings, Database},
     error::{AppError, Result},
-    logging::OpsLogger,
+    logging::init_tracing,
     paths::AppPaths,
 };
 
@@ -19,13 +19,13 @@ pub struct SharedState {
 struct StateInner {
     paths: Option<AppPaths>,
     db: Option<Arc<Database>>,
-    logger: Option<Arc<OpsLogger>>,
 }
 
 impl SharedState {
     pub fn initialize(&self, root: PathBuf, locale: Option<String>) -> Result<AppSettings> {
         let paths = AppPaths::new(root);
         paths.ensure_layout()?;
+        init_tracing(paths.ops_log_path().as_path())?;
 
         let db = Arc::new(Database::open(&paths)?);
         db.update_root_path(paths.root())?;
@@ -34,14 +34,10 @@ impl SharedState {
         }
         let settings = db.get_settings()?;
 
-        let logger = Arc::new(OpsLogger::new(paths.ops_log_path())?);
-        logger.log_line("init_root", format!("root={}", paths.root().display()))?;
-
         {
             let mut inner = self.inner.write().expect("state lock poisoned");
             inner.paths = Some(paths);
             inner.db = Some(db.clone());
-            inner.logger = Some(logger);
         }
 
         Ok(settings)
@@ -70,13 +66,5 @@ impl SharedState {
 
     fn db_opt(&self) -> Option<Arc<Database>> {
         self.inner.read().expect("state lock poisoned").db.clone()
-    }
-
-    pub fn logger(&self) -> Option<Arc<OpsLogger>> {
-        self.inner
-            .read()
-            .expect("state lock poisoned")
-            .logger
-            .clone()
     }
 }

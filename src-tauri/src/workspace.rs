@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::bcd::{
@@ -15,7 +16,6 @@ use crate::diskpart::{
 };
 use crate::dism::{apply_image, list_images};
 use crate::error::{AppError, Result};
-use crate::logging::OpsLogger;
 use crate::models::{Node, NodeStatus, WimImageInfo};
 use crate::paths::AppPaths;
 use crate::state::SharedState;
@@ -37,10 +37,6 @@ impl<'a> WorkspaceService<'a> {
 
     fn paths(&self) -> Result<AppPaths> {
         self.state.paths()
-    }
-
-    fn logger(&self) -> Option<std::sync::Arc<OpsLogger>> {
-        self.state.logger()
     }
 
     pub fn scan(&self) -> Result<Vec<Node>> {
@@ -69,9 +65,7 @@ impl<'a> WorkspaceService<'a> {
                 }
             }
             db.update_node_status(&n.id, status.clone())?;
-            if let Some(logger) = self.logger() {
-                let _ = logger.log_line("scan", format!("node={} status={:?}", n.id, status));
-            }
+            info!("scan node={} status={:?}", n.id, status);
         }
         Ok(db.fetch_nodes()?)
     }
@@ -106,6 +100,7 @@ impl<'a> WorkspaceService<'a> {
         let script = base_diskpart_script(&vhd_path, size_gb, &efi_letter, &sys_mount);
         let script_path = temp.write_script("create_base.txt", &script)?;
         let create_res = run_diskpart_script(&script_path)?;
+        log_command("diskpart create base", &create_res, Some(&script_path));
 
         if create_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error(
@@ -116,22 +111,26 @@ impl<'a> WorkspaceService<'a> {
         }
 
         let dism_res = apply_image(wim_file, wim_index, sys_mount.to_str().unwrap_or_default())?;
+        log_command("dism apply", &dism_res, None);
         if dism_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error("dism apply", &dism_res, None));
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
+        log_command("bcdboot", &bcd_res, None);
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error("bcdboot", &bcd_res, None));
         }
 
         let bcd_enum = bcdedit_enum_all()?;
+        log_command("bcdedit enum", &bcd_enum, None);
         let guid = extract_guid_for_vhd(&bcd_enum.stdout, vhd_path.to_str().unwrap_or_default())
             .unwrap_or_default();
 
         let detach_script = detach_vdisk_script(&vhd_path);
         let detach_path = temp.write_script("detach_base.txt", &detach_script)?;
-        let _ = run_diskpart_script(&detach_path);
+        let detach_res = run_diskpart_script(&detach_path)?;
+        log_command("diskpart detach base", &detach_res, Some(&detach_path));
 
         let node = Node {
             id: id.clone(),
@@ -157,9 +156,7 @@ impl<'a> WorkspaceService<'a> {
             "ok",
             "",
         )?;
-        if let Some(logger) = self.logger() {
-            let _ = logger.log_line("create_base", format!("id={id} path={}", node.path));
-        }
+        info!("create_base id={id} path={}", node.path);
         Ok(node)
     }
 
@@ -185,6 +182,7 @@ impl<'a> WorkspaceService<'a> {
             diff_diskpart_script(&vhd_path, Path::new(&parent.path), &efi_letter, &sys_mount);
         let script_path = temp.write_script("create_diff.txt", &script)?;
         let res = run_diskpart_script(&script_path)?;
+        log_command("diskpart create diff", &res, Some(&script_path));
         if res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error(
                 "diskpart create diff",
@@ -194,16 +192,19 @@ impl<'a> WorkspaceService<'a> {
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
+        log_command("bcdboot", &bcd_res, None);
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error("bcdboot", &bcd_res, None));
         }
         let bcd_enum = bcdedit_enum_all()?;
+        log_command("bcdedit enum", &bcd_enum, None);
         let guid = extract_guid_for_vhd(&bcd_enum.stdout, vhd_path.to_str().unwrap_or_default())
             .unwrap_or_default();
 
         let detach_script = detach_vdisk_script(&vhd_path);
         let detach_path = temp.write_script("detach_diff.txt", &detach_script)?;
-        let _ = run_diskpart_script(&detach_path);
+        let detach_res = run_diskpart_script(&detach_path)?;
+        log_command("diskpart detach diff", &detach_res, Some(&detach_path));
 
         let node = Node {
             id: id.clone(),
@@ -228,9 +229,7 @@ impl<'a> WorkspaceService<'a> {
             "ok",
             "",
         )?;
-        if let Some(logger) = self.logger() {
-            let _ = logger.log_line("create_diff", format!("id={id} parent={parent_id}"));
-        }
+        info!("create_diff id={id} parent={parent_id}");
         Ok(node)
     }
 
@@ -244,6 +243,7 @@ impl<'a> WorkspaceService<'a> {
             .clone()
             .ok_or_else(|| AppError::Message("node missing bcd guid".into()))?;
         let res = bcdedit_boot_sequence_and_reboot(&guid)?;
+        log_command("bcdedit bootsequence", &res, None);
         db.insert_op(
             &Uuid::new_v4().to_string(),
             Some(node_id),
@@ -251,9 +251,7 @@ impl<'a> WorkspaceService<'a> {
             "ok",
             "",
         )?;
-        if let Some(logger) = self.logger() {
-            let _ = logger.log_line("bootsequence", format!("node={node_id} guid={guid}"));
-        }
+        info!("bootsequence node={node_id} guid={guid}");
         Ok(res)
     }
 
@@ -282,13 +280,17 @@ impl<'a> WorkspaceService<'a> {
         for id in order.iter() {
             if let Some(node) = db.fetch_node(id)?.clone() {
                 if let Some(guid) = node.bcd_guid.as_ref() {
-                    let _ = bcdedit_delete(guid);
+                    if let Ok(o) = bcdedit_delete(guid) {
+                        log_command("bcdedit delete", &o, None);
+                    }
                 }
                 // attempt detach
                 let temp = TempManager::new(self.paths()?.tmp_dir())?;
                 let detach_script = detach_vdisk_script(Path::new(&node.path));
                 let path = temp.write_script("detach_cleanup.txt", &detach_script)?;
-                let _ = run_diskpart_script(&path);
+                if let Ok(o) = run_diskpart_script(&path) {
+                    log_command("diskpart detach cleanup", &o, Some(&path));
+                }
                 // delete file
                 let _ = fs::remove_file(&node.path);
             }
@@ -301,12 +303,7 @@ impl<'a> WorkspaceService<'a> {
             "ok",
             "",
         )?;
-        if let Some(logger) = self.logger() {
-            let _ = logger.log_line(
-                "delete_subtree",
-                format!("node={node_id} count={}", order.len()),
-            );
-        }
+        info!("delete_subtree node={node_id} count={}", order.len());
         Ok(())
     }
 
@@ -325,6 +322,7 @@ impl<'a> WorkspaceService<'a> {
         let attach_script = detail_vdisk_script(Path::new(&node.path));
         let attach_path = temp.write_script("attach_repair.txt", &attach_script)?;
         let attach_res = run_diskpart_script(&attach_path)?;
+        log_command("diskpart attach repair", &attach_res, Some(&attach_path));
         if attach_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error(
                 "diskpart attach",
@@ -334,10 +332,12 @@ impl<'a> WorkspaceService<'a> {
         }
 
         let bcd_res = run_bcdboot(&sys_mount, &efi_mount)?;
+        log_command("bcdboot", &bcd_res, None);
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error("bcdboot", &bcd_res, None));
         }
         let bcd_enum = bcdedit_enum_all()?;
+        log_command("bcdedit enum", &bcd_enum, None);
         let guid = extract_guid_for_vhd(&bcd_enum.stdout, &node.path);
         if let Some(guid) = &guid {
             db.update_node_bcd(&node.id, guid)?;
@@ -345,7 +345,9 @@ impl<'a> WorkspaceService<'a> {
 
         let detach_script = detach_vdisk_script(Path::new(&node.path));
         let detach_path = temp.write_script("detach_repair.txt", &detach_script)?;
-        let _ = run_diskpart_script(&detach_path);
+        if let Ok(o) = run_diskpart_script(&detach_path) {
+            log_command("diskpart detach repair", &o, Some(&detach_path));
+        }
 
         db.insert_op(
             &Uuid::new_v4().to_string(),
@@ -354,12 +356,11 @@ impl<'a> WorkspaceService<'a> {
             "ok",
             "",
         )?;
-        if let Some(logger) = self.logger() {
-            let _ = logger.log_line(
-                "repair_bcd",
-                format!("node={} guid={}", node.id, guid.clone().unwrap_or_default()),
-            );
-        }
+        info!(
+            "repair_bcd node={} guid={}",
+            node.id,
+            guid.clone().unwrap_or_default()
+        );
         Ok(guid)
     }
 
@@ -369,6 +370,7 @@ impl<'a> WorkspaceService<'a> {
         let script = detail_vdisk_script(Path::new(vhd_path));
         let script_path = temp.write_script("detail_vdisk.txt", &script)?;
         let res = run_diskpart_script(&script_path)?;
+        log_command("diskpart detail", &res, Some(&script_path));
         if res.exit_code.unwrap_or(-1) != 0 {
             return Err(command_error("diskpart detail", &res, Some(&script_path)));
         }
@@ -381,6 +383,24 @@ fn bcdedit_boot_sequence_and_reboot(guid: &str) -> Result<CommandOutput> {
     // Reboot immediately
     let _ = run_elevated_command("shutdown", &["/r", "/t", "0"], None);
     Ok(res)
+}
+
+fn log_command(name: &str, output: &CommandOutput, script: Option<&Path>) {
+    let mut parts = Vec::new();
+    if let Some(code) = output.exit_code {
+        parts.push(format!("exit={code}"));
+    }
+    if let Some(script) = script {
+        parts.push(format!("script={}", script.display()));
+    }
+    let stderr = output.stderr.trim();
+    let stdout = output.stdout.trim();
+    if !stderr.is_empty() {
+        parts.push(format!("stderr={}", truncate(stderr, 800)));
+    } else if !stdout.is_empty() {
+        parts.push(format!("stdout={}", truncate(stdout, 800)));
+    }
+    info!("{name}: {}", parts.join(" | "));
 }
 
 fn command_error(name: &str, output: &CommandOutput, script: Option<&Path>) -> AppError {
