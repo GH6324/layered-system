@@ -1,10 +1,10 @@
-use crate::error::{AppError, Result};
+use crate::error::Result;
 use crate::models::WimImageInfo;
-use crate::sys::{run_command, CommandOutput};
+use crate::sys::{run_command, run_elevated_command, CommandOutput};
 
 /// List images inside a WIM/ESD file via DISM /Get-WimInfo.
 pub fn list_images(image_path: &str) -> Result<Vec<WimImageInfo>> {
-    let output = run_command(
+    let output = run_elevated_command(
         "dism",
         &[
             "/English",
@@ -18,7 +18,7 @@ pub fn list_images(image_path: &str) -> Result<Vec<WimImageInfo>> {
 
 /// Apply a WIM/ESD image to a target directory.
 pub fn apply_image(image_path: &str, index: u32, apply_dir: &str) -> Result<CommandOutput> {
-    run_command(
+    run_elevated_command(
         "dism",
         &[
             "/English",

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::error::Result;
-use crate::sys::{run_command, CommandOutput};
+use crate::sys::{run_elevated_command, CommandOutput};
 
 #[derive(Debug, Clone)]
 pub struct VolumeInfo {
@@ -19,7 +19,7 @@ pub struct VhdDetail {
 
 /// Run a diskpart script stored at `script_path`.
 pub fn run_diskpart_script(script_path: &Path) -> Result<CommandOutput> {
-    run_command(
+    run_elevated_command(
         "diskpart",
         &["/s", script_path.to_string_lossy().as_ref()],
         None,

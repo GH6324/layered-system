@@ -19,7 +19,7 @@ use crate::logging::OpsLogger;
 use crate::models::{Node, NodeStatus, WimImageInfo};
 use crate::paths::AppPaths;
 use crate::state::SharedState;
-use crate::sys::{run_command, CommandOutput};
+use crate::sys::{run_elevated_command, CommandOutput};
 use crate::temp::TempManager;
 
 pub struct WorkspaceService<'a> {
@@ -391,6 +391,6 @@ impl<'a> WorkspaceService<'a> {
 fn bcdedit_boot_sequence_and_reboot(guid: &str) -> Result<CommandOutput> {
     let res = bcdedit_boot_sequence(guid)?;
     // Reboot immediately
-    let _ = run_command("shutdown", &["/r", "/t", "0"], None);
+    let _ = run_elevated_command("shutdown", &["/r", "/t", "0"], None);
     Ok(res)
 }

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::error::Result;
-use crate::sys::{run_command, CommandOutput};
+use crate::sys::{run_elevated_command, CommandOutput};
 
 pub fn run_bcdboot(system_dir: &Path, efi_mount: &Path) -> Result<CommandOutput> {
     let sys_path = system_dir
@@ -13,19 +13,19 @@ pub fn run_bcdboot(system_dir: &Path, efi_mount: &Path) -> Result<CommandOutput>
         .map(|s| s.to_string())
         .unwrap_or_else(|| efi_mount.to_string_lossy().to_string());
     let sys_arg = format!("{sys_path}\\Windows");
-    run_command("bcdboot", &[&sys_arg, "/s", &efi_path, "/f", "UEFI"], None)
+    run_elevated_command("bcdboot", &[&sys_arg, "/s", &efi_path, "/f", "UEFI"], None)
 }
 
 pub fn bcdedit_enum_all() -> Result<CommandOutput> {
-    run_command("bcdedit", &["/enum", "all"], None)
+    run_elevated_command("bcdedit", &["/enum", "all"], None)
 }
 
 pub fn bcdedit_boot_sequence(guid: &str) -> Result<CommandOutput> {
-    run_command("bcdedit", &["/bootsequence", guid], None)
+    run_elevated_command("bcdedit", &["/bootsequence", guid], None)
 }
 
 pub fn bcdedit_delete(guid: &str) -> Result<CommandOutput> {
-    run_command("bcdedit", &["/delete", guid], None)
+    run_elevated_command("bcdedit", &["/delete", guid], None)
 }
 
 /// Extract the identifier (GUID) for an entry whose device path references the given VHD path.
