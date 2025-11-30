@@ -21,11 +21,12 @@ impl AppPaths {
     }
 
     pub fn base_dir(&self) -> PathBuf {
-        self.root.join("base")
+        self.root.join("disks")
     }
 
+    // 必须要跟 base 目录相同，否则引导的时候会报错找不到 \Windows\System32\winload.efi
     pub fn diff_dir(&self) -> PathBuf {
-        self.root.join("diff")
+        self.root.join("disks")
     }
 
     pub fn meta_dir(&self) -> PathBuf {

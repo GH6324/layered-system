@@ -219,11 +219,11 @@ impl WorkspaceService {
 
         let temp = TempManager::new(paths.tmp_dir())?;
         fs::create_dir_all(paths.mount_root())?;
-        let (efi_letter, sys_letter) = pick_two_letters().ok_or_else(|| {
+        let sys_letter = pick_free_letter().ok_or_else(|| {
             AppError::Message("no free drive letter available between S: and Z:".into())
         })?;
 
-        let script = base_diskpart_script(&vhd_path, size_gb, efi_letter, sys_letter);
+        let script = base_diskpart_script(&vhd_path, size_gb, sys_letter);
         let script_path = temp.write_script("create_base.txt", &script)?;
         log_diskpart_script(&script_path);
         let create_res = run_diskpart_script(&script_path)?;
@@ -256,7 +256,7 @@ impl WorkspaceService {
             .or_else(|| extract_guid_for_partition_letter(&bcd_enum.stdout, sys_letter))
             .unwrap_or_default();
 
-        let detach_script = detach_vdisk_script(&vhd_path, &[efi_letter, sys_letter]);
+        let detach_script = detach_vdisk_script(&vhd_path, &[sys_letter]);
         let detach_path = temp.write_script("detach_base.txt", &detach_script)?;
         log_diskpart_script(&detach_path);
         let detach_res = run_diskpart_script(&detach_path)?;
@@ -303,7 +303,7 @@ impl WorkspaceService {
         let vhd_path = paths.diff_dir().join(filename);
 
         let temp = TempManager::new(paths.tmp_dir())?;
-        let (efi_letter, sys_letter) = pick_two_letters().ok_or_else(|| {
+        let sys_letter = pick_free_letter().ok_or_else(|| {
             AppError::Message("no free drive letter available between S: and Z:".into())
         })?;
 
@@ -346,8 +346,7 @@ impl WorkspaceService {
             }
         };
 
-        let assign_script =
-            assign_partitions_script(&vhd_path, &[(efi_part, efi_letter), (sys_part, sys_letter)]);
+        let assign_script = assign_partitions_script(&vhd_path, &[(sys_part, sys_letter)]);
         let assign_path = temp.write_script("assign_diff.txt", &assign_script)?;
         log_diskpart_script(&assign_path);
         let assign_res = run_diskpart_script(&assign_path)?;
@@ -372,7 +371,7 @@ impl WorkspaceService {
             .or_else(|| extract_guid_for_partition_letter(&bcd_enum.stdout, sys_letter))
             .unwrap_or_default();
 
-        let detach_script = detach_vdisk_script(&vhd_path, &[efi_letter, sys_letter]);
+        let detach_script = detach_vdisk_script(&vhd_path, &[sys_letter]);
         let detach_path = temp.write_script("detach_diff.txt", &detach_script)?;
         log_diskpart_script(&detach_path);
         let detach_res = run_diskpart_script(&detach_path)?;
@@ -729,29 +728,6 @@ fn pick_free_letter() -> Option<char> {
         }
     }
     None
-}
-
-fn pick_two_letters() -> Option<(char, char)> {
-    let mask = unsafe { GetLogicalDrives() };
-    if mask == 0 {
-        return None;
-    }
-    let mut free = Vec::new();
-    for letter in b'S'..=b'Z' {
-        let idx = (letter - b'A') as u32;
-        let in_use = (mask & (1 << idx)) != 0;
-        if !in_use {
-            free.push(letter as char);
-        }
-        if free.len() >= 2 {
-            break;
-        }
-    }
-    if free.len() >= 2 {
-        Some((free[0], free[1]))
-    } else {
-        None
-    }
 }
 
 fn log_diskpart_script(script: &Path) {

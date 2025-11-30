@@ -34,12 +34,7 @@ pub fn run_diskpart_script(script_path: &Path) -> Result<CommandOutput> {
 }
 
 /// Generate script to create and partition a base VHDX with GPT + EFI/MSR/Primary.
-pub fn base_diskpart_script(
-    vhd_path: &Path,
-    size_gb: u64,
-    efi_letter: char,
-    sys_letter: char,
-) -> String {
+pub fn base_diskpart_script(vhd_path: &Path, size_gb: u64, sys_letter: char) -> String {
     let size_mb = size_gb * 1024;
     format!(
         r#"
@@ -47,10 +42,6 @@ create vdisk file="{vhd}" maximum={size_mb} type=expandable
 select vdisk file="{vhd}"
 attach vdisk
 convert gpt
-create partition efi size=100
-format quick fs=fat32 label="EFI"
-assign letter={efi_letter}
-create partition msr size=16
 create partition primary
 format quick fs=ntfs label="System"
 assign letter={sys_letter}
