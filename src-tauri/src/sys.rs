@@ -26,12 +26,7 @@ pub fn run_command(program: &str, args: &[&str], workdir: Option<&Path>) -> Resu
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
     };
-    log_command(
-        program,
-        args.iter().map(|s| s.to_string()).collect(),
-        workdir,
-        &output,
-    );
+    log_command(program, args, workdir, &output);
     Ok(output)
 }
 
@@ -40,12 +35,14 @@ pub fn run_elevated_command(
     args: &[&str],
     workdir: Option<&Path>,
 ) -> Result<CommandOutput> {
-    run_elevated_command_impl(
+    let output = run_elevated_command_impl(
         program,
         args.iter().map(|s| s.to_string()).collect(),
         workdir,
     )
-    .map_err(|err| AppError::Message(err))
+    .map_err(|err| AppError::Message(err))?;
+    log_command(program, args, workdir, &output);
+    Ok(output)
 }
 
 #[elevated::elevated]
@@ -67,11 +64,10 @@ fn run_elevated_command_impl(
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
     };
-    log_command(program, args, workdir, &output);
     Ok(output)
 }
 
-fn log_command(program: &str, args: Vec<String>, workdir: Option<&Path>, output: &CommandOutput) {
+fn log_command(program: &str, args: &[&str], workdir: Option<&Path>, output: &CommandOutput) {
     let mut parts = Vec::new();
     parts.push(format!("cmd={program} {}", args.join(" ")));
     if let Some(dir) = workdir {
