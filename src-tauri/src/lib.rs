@@ -26,6 +26,7 @@ pub fn run() {
             commands::get_settings,
             commands::init_root,
             commands::scan_workspace,
+            commands::list_nodes,
             commands::list_wim_images,
             commands::create_base_vhd,
             commands::create_diff_vhd,

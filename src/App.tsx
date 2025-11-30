@@ -45,7 +45,7 @@ function App() {
   const refreshNodes = async () => {
     if (!workspaceReady) return;
     try {
-      const list = await invoke<Node[]>("scan_workspace");
+      const list = await invoke<Node[]>("list_nodes");
       setNodes(list);
     } catch (err) {
       setStatus("error");
@@ -95,6 +95,12 @@ function App() {
       setSelectedNode(nodes[0].id);
     }
   }, [workspaceReady, nodes, selectedNode]);
+
+  useEffect(() => {
+    if (!workspaceReady) return;
+    refreshNodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceReady]);
 
   const treeData = useMemo<TreeNode[]>(() => {
     const map = new Map<string, TreeNode>();
@@ -214,6 +220,17 @@ function App() {
     }
   };
 
+  const handleCheck = async () => {
+    try {
+      const list = await invoke<Node[]>("scan_workspace");
+      setNodes(list);
+      setMessage(t("message-checked"));
+    } catch (err) {
+      setStatus("error");
+      setMessage(t("status-error", { msg: String(err) }));
+    }
+  };
+
   const handleBootReboot = async () => {
     if (!selectedNode) return;
     try {
@@ -296,9 +313,14 @@ function App() {
               <span className="label">{t("admin-status", { status: "" })}</span>
               <span className={`pill ${admin ? "ok" : "warn"}`}>{adminLabel}</span>
               <span className="mono">{rootPath}</span>
-              <button className="ghost-btn" onClick={refreshNodes}>
-                {t("refresh-button")}
-              </button>
+              <div className="row-actions">
+                <button className="ghost-btn" onClick={refreshNodes}>
+                  {t("refresh-button")}
+                </button>
+                <button className="ghost-btn" onClick={handleCheck}>
+                  {t("check-button")}
+                </button>
+              </div>
             </div>
             <div className={`message ${status}`}>
               <span>{message}</span>

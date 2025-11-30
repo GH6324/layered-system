@@ -59,6 +59,12 @@ pub fn scan_workspace(state: State<SharedState>) -> CmdResult<Vec<Node>> {
 }
 
 #[tauri::command]
+pub fn list_nodes(state: State<SharedState>) -> CmdResult<Vec<Node>> {
+    let svc = WorkspaceService::new(&state);
+    svc.list_nodes().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn list_wim_images(
     image_path: String,
     state: State<SharedState>,

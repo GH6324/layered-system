@@ -71,6 +71,11 @@ impl<'a> WorkspaceService<'a> {
         Ok(db.fetch_nodes()?)
     }
 
+    /// Lightweight fetch without validation; used by UI refresh to avoid slow diskpart checks.
+    pub fn list_nodes(&self) -> Result<Vec<Node>> {
+        self.db()?.fetch_nodes()
+    }
+
     pub fn list_wim_images(&self, image_path: &str) -> Result<Vec<WimImageInfo>> {
         list_images(image_path)
     }
