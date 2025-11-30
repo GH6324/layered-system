@@ -472,7 +472,7 @@ impl WorkspaceService {
                     log_command("diskpart detach cleanup", &o, Some(&path));
                 }
                 // delete file
-                let _ = fs::remove_file(&node.path);
+                // let _ = fs::remove_file(&node.path);
             }
         }
         db.delete_nodes(&order)?;
