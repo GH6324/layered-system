@@ -1,5 +1,8 @@
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsStr;
 use std::fs;
+use std::iter::once;
+use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -24,7 +27,7 @@ use crate::paths::AppPaths;
 use crate::state::SharedState;
 use crate::sys::{run_elevated_command, CommandOutput};
 use crate::temp::TempManager;
-use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
+use windows_sys::Win32::Storage::FileSystem::{GetLogicalDrives, QueryDosDeviceW};
 
 pub struct WorkspaceService {
     state: SharedState,
@@ -681,8 +684,9 @@ fn collect_vhdx_files(root: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn normalize_path(path: &str) -> String {
-    path.trim()
-        .trim_start_matches("\\\\?\\")
+    let trimmed = path.trim().trim_start_matches("\\\\?\\");
+    let adjusted = device_path_to_drive(trimmed).unwrap_or_else(|| trimmed.to_string());
+    adjusted
         .replace('/', "\\")
         .to_ascii_lowercase()
 }
@@ -728,6 +732,49 @@ fn pick_free_letter() -> Option<char> {
         }
     }
     None
+}
+
+/// Convert a device path (e.g. `\Device\HarddiskVolume10\foo`) to a drive path if possible.
+fn device_path_to_drive(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    let mut cleaned: &str = &lower;
+    if let Some(rest) = cleaned.strip_prefix("\\??\\") {
+        cleaned = rest;
+    }
+    if let Some(rest) = cleaned.strip_prefix("\\globalroot\\") {
+        cleaned = rest;
+    }
+    if !cleaned.starts_with("\\device\\") {
+        return None;
+    }
+
+    for letter in b'A'..=b'Z' {
+        let drive = format!("{}:", letter as char);
+        if let Some(prefix) = query_dos_device(&drive) {
+            let prefix_lower = prefix.to_ascii_lowercase();
+            if cleaned.starts_with(&prefix_lower) && cleaned.len() >= prefix_lower.len() {
+                let rest = cleaned[prefix_lower.len()..].trim_start_matches(['\\', '/']);
+                return if rest.is_empty() {
+                    Some(format!("{drive}\\"))
+                } else {
+                    Some(format!(r"{drive}\{rest}"))
+                };
+            }
+        }
+    }
+    None
+}
+
+fn query_dos_device(drive: &str) -> Option<String> {
+    let wide: Vec<u16> = OsStr::new(drive).encode_wide().chain(once(0)).collect();
+    let mut buffer = vec![0u16; 512];
+    let len = unsafe { QueryDosDeviceW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) };
+    if len == 0 {
+        return None;
+    }
+    let slice = &buffer[..len as usize];
+    let end = slice.iter().position(|&c| c == 0).unwrap_or(slice.len());
+    Some(String::from_utf16_lossy(&slice[..end]))
 }
 
 fn log_diskpart_script(script: &Path) {
