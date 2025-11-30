@@ -1,8 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use tracing::info;
 use uuid::Uuid;
 
@@ -41,33 +42,151 @@ impl WorkspaceService {
     }
 
     pub fn scan(&self) -> Result<Vec<Node>> {
+        let paths = self.paths()?;
+        paths.ensure_layout()?;
         let db = self.db()?;
-        let nodes = db.fetch_nodes()?;
-        // Basic validations: file existence and parent linkage.
-        let mut path_map: HashMap<String, Node> =
-            nodes.iter().map(|n| (n.id.clone(), n.clone())).collect();
-        for n in nodes.iter() {
-            let mut status = n.status.clone();
-            if !Path::new(&n.path).exists() {
-                status = NodeStatus::MissingFile;
-            } else if let Some(parent_id) = &n.parent_id {
-                if !path_map.contains_key(parent_id) {
-                    status = NodeStatus::MissingParent;
-                } else if let Some(detail) = self.detail_vdisk(&n.path).ok() {
-                    if let Some(parent_path) = detail.parent {
-                        if let Some(parent_node) = path_map.get(parent_id) {
-                            if parent_node.path.to_ascii_lowercase()
-                                != parent_path.to_ascii_lowercase()
-                            {
-                                status = NodeStatus::MissingParent;
-                            }
+
+        let existing_nodes = db.fetch_nodes()?;
+        let mut existing_paths: HashMap<String, Node> = existing_nodes
+            .iter()
+            .map(|n| (normalize_path(&n.path), n.clone()))
+            .collect();
+
+        let vhd_paths = collect_vhdx_files(paths.root())?;
+        let bcd_enum = if vhd_paths.is_empty() {
+            None
+        } else {
+            bcdedit_enum_all().ok()
+        };
+        let mut scanned = Vec::new();
+
+        for path in vhd_paths {
+            let path_str = path.to_string_lossy().to_string();
+            let normalized = normalize_path(&path_str);
+            let created_at = file_time_or_now(&path);
+
+            let mut parent_normalized = None;
+            let mut detail_ok = true;
+            match self.detail_vdisk(&path_str) {
+                Ok(detail) => {
+                    parent_normalized = detail.parent.map(|p| normalize_path(&p));
+                }
+                Err(err) => {
+                    detail_ok = false;
+                    info!("detail_vdisk failed path={} err={err}", path_str);
+                }
+            }
+
+            let bcd_guid = bcd_enum
+                .as_ref()
+                .and_then(|out| extract_guid_for_vhd(&out.stdout, &path_str));
+
+            scanned.push(ScannedVhd {
+                path: path_str,
+                normalized,
+                parent_normalized,
+                detail_ok,
+                created_at,
+                bcd_guid,
+            });
+        }
+
+        // Assign IDs for all discovered VHDX files (reuse existing where possible).
+        let mut path_to_id: HashMap<String, String> = existing_paths
+            .iter()
+            .map(|(p, n)| (p.clone(), n.id.clone()))
+            .collect();
+        for info in &scanned {
+            path_to_id
+                .entry(info.normalized.clone())
+                .or_insert_with(|| Uuid::new_v4().to_string());
+        }
+
+        // Insert newly discovered nodes.
+        for info in &scanned {
+            if existing_paths.contains_key(&info.normalized) {
+                continue;
+            }
+            let id = path_to_id
+                .get(&info.normalized)
+                .cloned()
+                .expect("id must exist for scanned path");
+            let node = Node {
+                id: id.clone(),
+                parent_id: None,
+                name: derive_name_from_path(&info.path),
+                path: info.path.clone(),
+                bcd_guid: info.bcd_guid.clone(),
+                desc: None,
+                created_at: info.created_at,
+                status: NodeStatus::Normal,
+                boot_files_ready: info.bcd_guid.is_some(),
+            };
+            db.insert_node(&node)?;
+            db.insert_op(
+                &Uuid::new_v4().to_string(),
+                Some(&id),
+                "import_vhdx",
+                "ok",
+                &format!("path={}", node.path),
+            )?;
+            existing_paths.insert(info.normalized.clone(), node);
+        }
+
+        // Update parent linkage and BCD info for existing records.
+        for info in &scanned {
+            if let Some(node_id) = path_to_id.get(&info.normalized) {
+                let target_parent = info
+                    .parent_normalized
+                    .as_ref()
+                    .and_then(|p| path_to_id.get(p).cloned());
+                if let Some(existing) = existing_paths.get_mut(&info.normalized) {
+                    if existing.parent_id != target_parent {
+                        db.update_node_parent(node_id, target_parent.as_deref())?;
+                        existing.parent_id = target_parent.clone();
+                    }
+                    if let Some(guid) = info.bcd_guid.as_ref() {
+                        if existing.bcd_guid.as_deref() != Some(guid.as_str()) {
+                            db.update_node_bcd(node_id, guid)?;
+                            existing.bcd_guid = Some(guid.clone());
+                            existing.boot_files_ready = true;
                         }
                     }
+                }
+            }
+        }
+
+        let latest_nodes = db.fetch_nodes()?;
+        let detail_lookup: HashMap<String, (Option<String>, bool)> = scanned
+            .into_iter()
+            .map(|info| (info.normalized, (info.parent_normalized, info.detail_ok)))
+            .collect();
+        let id_by_path: HashMap<String, String> = latest_nodes
+            .iter()
+            .map(|n| (normalize_path(&n.path), n.id.clone()))
+            .collect();
+
+        for n in latest_nodes.iter() {
+            let normalized = normalize_path(&n.path);
+            let mut status = NodeStatus::Normal;
+            if !Path::new(&n.path).exists() {
+                status = NodeStatus::MissingFile;
+            } else if let Some((parent_path, detail_ok)) = detail_lookup.get(&normalized) {
+                if !detail_ok {
+                    status = NodeStatus::Error;
+                } else if let Some(parent_norm) = parent_path {
+                    match id_by_path.get(parent_norm) {
+                        Some(pid) if n.parent_id.as_deref() == Some(pid.as_str()) => {}
+                        Some(_) | None => status = NodeStatus::MissingParent,
+                    }
+                } else if n.parent_id.is_some() {
+                    status = NodeStatus::MissingParent;
                 }
             }
             db.update_node_status(&n.id, status.clone())?;
             info!("scan node={} status={:?}", n.id, status);
         }
+
         Ok(db.fetch_nodes()?)
     }
 
@@ -427,6 +546,66 @@ impl WorkspaceService {
         }
         Ok(parse_detail_vdisk_parent(&res.stdout))
     }
+}
+
+#[derive(Debug)]
+struct ScannedVhd {
+    path: String,
+    normalized: String,
+    parent_normalized: Option<String>,
+    detail_ok: bool,
+    created_at: DateTime<Utc>,
+    bcd_guid: Option<String>,
+}
+
+fn collect_vhdx_files(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut stack = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.eq_ignore_ascii_case("vhdx"))
+                .unwrap_or(false)
+            {
+                files.push(path);
+            }
+        }
+    }
+    Ok(files)
+}
+
+fn normalize_path(path: &str) -> String {
+    path.trim()
+        .trim_start_matches("\\\\?\\")
+        .replace('/', "\\")
+        .to_ascii_lowercase()
+}
+
+fn derive_name_from_path(path: &str) -> String {
+    let stem = Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("vhdx");
+    if let Some((prefix, rest)) = stem.split_once('-') {
+        if prefix.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty() {
+            return rest.to_string();
+        }
+    }
+    stem.to_string()
+}
+
+fn file_time_or_now(path: &Path) -> DateTime<Utc> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|m| m.created().or_else(|_| m.modified()).ok())
+        .map(DateTime::<Utc>::from)
+        .unwrap_or_else(Utc::now)
 }
 
 fn bcdedit_boot_sequence_and_reboot(guid: &str) -> Result<CommandOutput> {

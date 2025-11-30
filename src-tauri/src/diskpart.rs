@@ -108,7 +108,10 @@ pub fn parse_detail_vdisk_parent(output: &str) -> VhdDetail {
     let mut parent = None;
     for line in output.lines() {
         let lower = line.to_ascii_lowercase();
-        if lower.contains("parent path") || lower.contains("parent:") {
+        if lower.contains("parent path")
+            || lower.contains("parent:")
+            || lower.contains("parent filename")
+        {
             if let Some(idx) = line.find(':') {
                 let rest = line[idx + 1..].trim();
                 if !rest.is_empty() {
