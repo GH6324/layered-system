@@ -269,8 +269,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 font-sans text-ink-900">
-      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 font-sans text-ink-900">
+      <main className="mx-auto flex h-full max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
         <Card className="p-5 shadow-lg shadow-peach-300/30">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -298,31 +298,33 @@ function App() {
         </Card>
 
         {!workspaceReady ? (
-          <WorkspaceGate
-            rootPath={rootPath}
-            setRootPath={setRootPath}
-            wimPath={wimPath}
-            setWimPath={setWimPath}
-            wimIndex={wimIndex}
-            setWimIndex={setWimIndex}
-            baseSize={baseSize}
-            setBaseSize={setBaseSize}
-            baseName={baseName}
-            setBaseName={setBaseName}
-            baseDesc={baseDesc}
-            setBaseDesc={setBaseDesc}
-            wimImages={wimImages}
-            onListWim={handleListWim}
-            onOpenExisting={handleOpenExisting}
-            onCreateWorkspace={handleCreateWorkspace}
-            status={status}
-            message={message}
-            admin={admin}
-            adminLabel={adminLabel}
-            t={t}
-          />
+          <div className="flex-1 overflow-auto">
+            <WorkspaceGate
+              rootPath={rootPath}
+              setRootPath={setRootPath}
+              wimPath={wimPath}
+              setWimPath={setWimPath}
+              wimIndex={wimIndex}
+              setWimIndex={setWimIndex}
+              baseSize={baseSize}
+              setBaseSize={setBaseSize}
+              baseName={baseName}
+              setBaseName={setBaseName}
+              baseDesc={baseDesc}
+              setBaseDesc={setBaseDesc}
+              wimImages={wimImages}
+              onListWim={handleListWim}
+              onOpenExisting={handleOpenExisting}
+              onCreateWorkspace={handleCreateWorkspace}
+              status={status}
+              message={message}
+              admin={admin}
+              adminLabel={adminLabel}
+              t={t}
+            />
+          </div>
         ) : (
-          <section className="flex min-h-[60vh] flex-col gap-4">
+          <section className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             <Card className="flex flex-wrap items-center justify-between gap-3 p-4 shadow-md shadow-peach-300/25">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge tone={admin ? "positive" : "warn"} className="px-3 py-1">
@@ -346,7 +348,7 @@ function App() {
               </div>
             </Card>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
               <NodeTree
                 data={treeData}
                 selectedId={selectedNode}

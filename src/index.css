@@ -10,3 +10,15 @@
   --color-ink-900: #2a1f2f;
   --color-ink-700: #47344d;
 }
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #ffd3b6;
+}

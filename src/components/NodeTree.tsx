@@ -59,7 +59,7 @@ export function NodeTree({ data, selectedId, onSelect, statusLabels, t }: Props)
   };
 
   return (
-    <Card className="h-full p-4">
+    <Card className="h-full min-h-0 overflow-hidden p-4">
       <div className="max-h-full space-y-3 overflow-y-auto pr-1">{renderTree(data)}</div>
     </Card>
   );
