@@ -262,7 +262,7 @@ function App() {
 
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 font-sans text-ink-900">
-      <main className="mx-auto flex h-full max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto flex h-full max-w-6xl flex-col gap-4 px-3 py-4 sm:px-5 sm:py-5 lg:px-6">
         <Card className="p-5 shadow-lg shadow-peach-300/30">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
