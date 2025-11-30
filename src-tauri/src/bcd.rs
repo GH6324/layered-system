@@ -14,7 +14,7 @@ pub fn run_bcdboot(system_dir: &Path) -> Result<CommandOutput> {
 }
 
 pub fn bcdedit_enum_all() -> Result<CommandOutput> {
-    run_elevated_command("bcdedit", &["/enum", "all"], None)
+    run_elevated_command("bcdedit", &["/enum", "all", "/v"], None)
 }
 
 pub fn bcdedit_boot_sequence(guid: &str) -> Result<CommandOutput> {
@@ -32,8 +32,7 @@ pub fn bcdedit_set_description(guid: &str, desc: &str) -> Result<CommandOutput> 
 /// Extract the identifier (GUID) for an entry whose device path references the given VHD path.
 pub fn extract_guid_for_vhd(bcd_output: &str, vhd_path: &str) -> Option<String> {
     let mut current_guid: Option<String> = None;
-    let needle = vhd_path.to_ascii_lowercase();
-    let needle_no_brackets = needle.replace(['[', ']'], "");
+    let needle = normalize_vhd_path(vhd_path);
     for line in bcd_output.lines() {
         let lower = line.to_ascii_lowercase();
         if lower.starts_with("identifier") {
@@ -41,11 +40,9 @@ pub fn extract_guid_for_vhd(bcd_output: &str, vhd_path: &str) -> Option<String> 
                 current_guid = Some(guid.trim().to_string());
             }
         }
-        if lower.contains("device") || lower.contains("osdevice") {
-            if lower.contains("vhd")
-                && (lower.contains(&needle)
-                    || lower.replace(['[', ']'], "").contains(&needle_no_brackets))
-            {
+        if let Some(dev_path) = parse_vhd_device_path(line) {
+            let candidate = normalize_vhd_path(&dev_path);
+            if candidate == needle {
                 if let Some(guid) = &current_guid {
                     return Some(guid.clone());
                 }
@@ -75,4 +72,35 @@ pub fn extract_guid_for_partition_letter(bcd_output: &str, letter: char) -> Opti
         }
     }
     None
+}
+
+/// Extract raw VHD path from a device/osdevice line; strips trailing ",locate=..." if present.
+fn parse_vhd_device_path(line: &str) -> Option<String> {
+    let lower = line.to_ascii_lowercase();
+    if !(lower.contains("device") || lower.contains("osdevice")) {
+        return None;
+    }
+    let before_comma = line.split_once(',').map(|(h, _)| h).unwrap_or(line);
+    let lower_before = before_comma.to_ascii_lowercase();
+    let pos = lower_before.find("vhd=")?;
+    let path_part = before_comma[pos + 4..].trim();
+    let token = path_part.split_whitespace().next().unwrap_or("");
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+/// Normalize VHD paths for comparison: remove brackets, unify separators, drop \\?\ prefix, lowercase.
+fn normalize_vhd_path(path: &str) -> String {
+    let mut normalized = path.trim().trim_start_matches("\\\\?\\").replace('/', "\\");
+    if normalized.starts_with('[') {
+        if let Some(end) = normalized.find(']') {
+            let drive = &normalized[1..end];
+            let rest = &normalized[end + 1..];
+            normalized = format!("{drive}{rest}");
+        }
+    }
+    normalized.replace(['[', ']'], "").to_ascii_lowercase()
 }
