@@ -303,7 +303,12 @@ impl WorkspaceService {
         let seq = db.next_seq()?;
         let id = Uuid::new_v4().to_string();
         let filename = format!("{seq:04}-{slug}.vhdx", slug = name.to_lowercase());
-        let vhd_path = paths.diff_dir().join(filename);
+
+        let parent_path = Path::new(&parent.path);
+        let parent_dir = parent_path
+            .parent()
+            .ok_or_else(|| AppError::Message(format!("invalid parent path: {}", parent.path)))?;
+        let vhd_path = parent_dir.join(filename);
 
         let temp = TempManager::new(paths.tmp_dir())?;
         let sys_letter = pick_free_letter().ok_or_else(|| {
@@ -686,9 +691,7 @@ fn collect_vhdx_files(root: &Path) -> Result<Vec<PathBuf>> {
 fn normalize_path(path: &str) -> String {
     let trimmed = path.trim().trim_start_matches("\\\\?\\");
     let adjusted = device_path_to_drive(trimmed).unwrap_or_else(|| trimmed.to_string());
-    adjusted
-        .replace('/', "\\")
-        .to_ascii_lowercase()
+    adjusted.replace('/', "\\").to_ascii_lowercase()
 }
 
 fn derive_name_from_path(path: &str) -> String {
