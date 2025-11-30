@@ -99,6 +99,7 @@ impl<'a> WorkspaceService<'a> {
 
         let script = base_diskpart_script(&vhd_path, size_gb, efi_letter, sys_letter);
         let script_path = temp.write_script("create_base.txt", &script)?;
+        log_diskpart_script(&script_path);
         let create_res = run_diskpart_script(&script_path)?;
         log_command("diskpart create base", &create_res, Some(&script_path));
 
@@ -131,6 +132,7 @@ impl<'a> WorkspaceService<'a> {
 
         let detach_script = detach_vdisk_script(&vhd_path, &[efi_letter, sys_letter]);
         let detach_path = temp.write_script("detach_base.txt", &detach_script)?;
+        log_diskpart_script(&detach_path);
         let detach_res = run_diskpart_script(&detach_path)?;
         log_command("diskpart detach base", &detach_res, Some(&detach_path));
 
@@ -181,6 +183,7 @@ impl<'a> WorkspaceService<'a> {
 
         let attach_script = diff_attach_list_script(&vhd_path, Path::new(&parent.path));
         let attach_path = temp.write_script("create_diff.txt", &attach_script)?;
+        log_diskpart_script(&attach_path);
         let attach_res = run_diskpart_script(&attach_path)?;
         log_command("diskpart create diff", &attach_res, Some(&attach_path));
         if attach_res.exit_code.unwrap_or(-1) != 0 {
@@ -220,6 +223,7 @@ impl<'a> WorkspaceService<'a> {
         let assign_script =
             assign_partitions_script(&vhd_path, &[(efi_part, efi_letter), (sys_part, sys_letter)]);
         let assign_path = temp.write_script("assign_diff.txt", &assign_script)?;
+        log_diskpart_script(&assign_path);
         let assign_res = run_diskpart_script(&assign_path)?;
         log_command("diskpart assign diff", &assign_res, Some(&assign_path));
         if assign_res.exit_code.unwrap_or(-1) != 0 {
@@ -244,6 +248,7 @@ impl<'a> WorkspaceService<'a> {
 
         let detach_script = detach_vdisk_script(&vhd_path, &[efi_letter, sys_letter]);
         let detach_path = temp.write_script("detach_diff.txt", &detach_script)?;
+        log_diskpart_script(&detach_path);
         let detach_res = run_diskpart_script(&detach_path)?;
         log_command("diskpart detach diff", &detach_res, Some(&detach_path));
 
@@ -329,6 +334,7 @@ impl<'a> WorkspaceService<'a> {
                 let temp = TempManager::new(self.paths()?.tmp_dir())?;
                 let detach_script = detach_vdisk_script(Path::new(&node.path), &[]);
                 let path = temp.write_script("detach_cleanup.txt", &detach_script)?;
+                log_diskpart_script(&path);
                 if let Ok(o) = run_diskpart_script(&path) {
                     log_command("diskpart detach cleanup", &o, Some(&path));
                 }
@@ -362,6 +368,7 @@ impl<'a> WorkspaceService<'a> {
 
         let attach_script = detail_vdisk_script(Path::new(&node.path));
         let attach_path = temp.write_script("attach_repair.txt", &attach_script)?;
+        log_diskpart_script(&attach_path);
         let attach_res = run_diskpart_script(&attach_path)?;
         log_command("diskpart attach repair", &attach_res, Some(&attach_path));
         if attach_res.exit_code.unwrap_or(-1) != 0 {
@@ -386,6 +393,7 @@ impl<'a> WorkspaceService<'a> {
 
         let detach_script = detach_vdisk_script(Path::new(&node.path), &[]);
         let detach_path = temp.write_script("detach_repair.txt", &detach_script)?;
+        log_diskpart_script(&detach_path);
         if let Ok(o) = run_diskpart_script(&detach_path) {
             log_command("diskpart detach repair", &o, Some(&detach_path));
         }
@@ -410,6 +418,7 @@ impl<'a> WorkspaceService<'a> {
         let temp = TempManager::new(paths.tmp_dir())?;
         let script = detail_vdisk_script(Path::new(vhd_path));
         let script_path = temp.write_script("detail_vdisk.txt", &script)?;
+        log_diskpart_script(&script_path);
         let res = run_diskpart_script(&script_path)?;
         log_command("diskpart detail", &res, Some(&script_path));
         if res.exit_code.unwrap_or(-1) != 0 {
@@ -462,6 +471,24 @@ fn pick_two_letters() -> Option<(char, char)> {
     } else {
         None
     }
+}
+
+fn log_diskpart_script(script: &Path) {
+    let mut parts = Vec::new();
+    match fs::read_to_string(script) {
+        Ok(content) => {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                parts.push(format!("script={}", truncate(trimmed, 4000)));
+            }
+        }
+        Err(err) => parts.push(format!("script_read_err={err}")),
+    }
+    info!(
+        "diskpart script {}: {}",
+        script.display(),
+        parts.join(" | ")
+    );
 }
 
 fn log_command(name: &str, output: &CommandOutput, script: Option<&Path>) {
