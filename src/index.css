@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --color-peach-50: #ffd3b6;
+  --color-peach-100: #fbc1b5;
+  --color-peach-200: #dfa3a5;
+  --color-peach-300: #c79eaf;
+  --color-peach-400: #a88ba7;
+  --color-ink-900: #2a1f2f;
+  --color-ink-700: #47344d;
+}

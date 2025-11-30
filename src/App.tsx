@@ -5,7 +5,6 @@ import { NodeDetail } from "./components/NodeDetail";
 import { NodeTree } from "./components/NodeTree";
 import { WorkspaceGate } from "./components/WorkspaceGate";
 import { Node, Settings, StatusLabels, TreeNode, WimImageInfo } from "./types";
-import "./App.css";
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -267,89 +266,127 @@ function App() {
   };
 
   return (
-    <main className="app">
-      <header className="header">
-        <div>
-          <p className="eyebrow">{t("subtitle")}</p>
-          <h1>{t("title")}</h1>
-        </div>
-        <div className="locale-switcher">
-          <label htmlFor="locale">{t("locale-label")}</label>
-          <select id="locale" value={i18n.language} onChange={(e) => handleLocaleChange(e.target.value)}>
-            <option value="zh-CN">{t("locale-zh")}</option>
-            <option value="en">{t("locale-en")}</option>
-          </select>
-        </div>
-      </header>
-
-      {!workspaceReady ? (
-        <WorkspaceGate
-          rootPath={rootPath}
-          setRootPath={setRootPath}
-          wimPath={wimPath}
-          setWimPath={setWimPath}
-          wimIndex={wimIndex}
-          setWimIndex={setWimIndex}
-          baseSize={baseSize}
-          setBaseSize={setBaseSize}
-          baseName={baseName}
-          setBaseName={setBaseName}
-          baseDesc={baseDesc}
-          setBaseDesc={setBaseDesc}
-          wimImages={wimImages}
-          onListWim={handleListWim}
-          onOpenExisting={handleOpenExisting}
-          onCreateWorkspace={handleCreateWorkspace}
-          status={status}
-          message={message}
-          admin={admin}
-          adminLabel={adminLabel}
-          t={t}
-        />
-      ) : (
-        <section className="workspace-main">
-          <div className="topbar">
-            <div className="topbar-left">
-              <span className={`pill ${admin ? "ok" : "warn"}`}>{adminLabel}</span>
-              <span className="mono truncate">{rootPath}</span>
+    <div className="min-h-screen bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 text-ink-900">
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+        <header className="rounded-2xl border border-white/60 bg-white/80 p-5 shadow-lg shadow-peach-300/30 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-peach-400">{t("subtitle")}</p>
+              <h1 className="text-3xl font-bold leading-tight sm:text-4xl">{t("title")}</h1>
             </div>
-            <div className="topbar-right">
-              <button className="ghost-btn" onClick={refreshNodes}>
-                {t("refresh-button")}
-              </button>
-              <button className="ghost-btn" onClick={handleCheck}>
-                {t("check-button")}
-              </button>
-              <span className={`message-chip ${status}`}>{message}</span>
+            <div className="flex items-center gap-3 rounded-full border border-peach-200/80 bg-peach-50/80 px-3 py-2 shadow-inner shadow-peach-400/25">
+              <label
+                htmlFor="locale"
+                className="text-xs font-semibold uppercase tracking-wide text-ink-700"
+              >
+                {t("locale-label")}
+              </label>
+              <select
+                id="locale"
+                value={i18n.language}
+                onChange={(e) => handleLocaleChange(e.target.value)}
+                className="rounded-full border border-peach-200 bg-white/90 px-3 py-2 text-sm font-semibold text-ink-900 shadow-sm shadow-peach-200/50 focus:border-peach-300 focus:outline-none focus:ring-2 focus:ring-peach-300/60"
+              >
+                <option value="zh-CN">{t("locale-zh")}</option>
+                <option value="en">{t("locale-en")}</option>
+              </select>
             </div>
           </div>
+        </header>
 
-          <div className="node-panels">
-            <NodeTree
-              data={treeData}
-              selectedId={selectedNode}
-              onSelect={(id) => setSelectedNode(id)}
-              statusLabels={statusLabels}
-              t={t}
-            />
-            <NodeDetail
-              selected={selectedDetail}
-              parentNode={parentNode}
-              statusLabels={statusLabels}
-              diffName={diffName}
-              diffDesc={diffDesc}
-              setDiffName={setDiffName}
-              setDiffDesc={setDiffDesc}
-              onCreateDiff={handleCreateDiff}
-              onBoot={handleBootReboot}
-              onRepair={handleRepair}
-              onDelete={handleDelete}
-              t={t}
-            />
-          </div>
-        </section>
-      )}
-    </main>
+        {!workspaceReady ? (
+          <WorkspaceGate
+            rootPath={rootPath}
+            setRootPath={setRootPath}
+            wimPath={wimPath}
+            setWimPath={setWimPath}
+            wimIndex={wimIndex}
+            setWimIndex={setWimIndex}
+            baseSize={baseSize}
+            setBaseSize={setBaseSize}
+            baseName={baseName}
+            setBaseName={setBaseName}
+            baseDesc={baseDesc}
+            setBaseDesc={setBaseDesc}
+            wimImages={wimImages}
+            onListWim={handleListWim}
+            onOpenExisting={handleOpenExisting}
+            onCreateWorkspace={handleCreateWorkspace}
+            status={status}
+            message={message}
+            admin={admin}
+            adminLabel={adminLabel}
+            t={t}
+          />
+        ) : (
+          <section className="flex min-h-[60vh] flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/80 px-4 py-3 shadow-md shadow-peach-300/25 backdrop-blur">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
+                    admin
+                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border border-amber-200 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {adminLabel}
+                </span>
+                <span className="truncate font-mono text-sm text-ink-700">{rootPath}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="rounded-xl border border-peach-200/80 bg-white/90 px-3 py-2 text-sm font-semibold text-ink-900 shadow-sm shadow-peach-300/30 transition hover:-translate-y-0.5 hover:border-peach-300 hover:bg-peach-50 focus:outline-none focus:ring-2 focus:ring-peach-300/60"
+                  onClick={refreshNodes}
+                >
+                  {t("refresh-button")}
+                </button>
+                <button
+                  className="rounded-xl border border-peach-200/80 bg-white/90 px-3 py-2 text-sm font-semibold text-ink-900 shadow-sm shadow-peach-300/30 transition hover:-translate-y-0.5 hover:border-peach-300 hover:bg-peach-50 focus:outline-none focus:ring-2 focus:ring-peach-300/60"
+                  onClick={handleCheck}
+                >
+                  {t("check-button")}
+                </button>
+                <span
+                  className={`truncate rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm ${
+                    status === "initialized"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : status === "error"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-peach-200 bg-white/80 text-ink-700"
+                  }`}
+                >
+                  {message}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+              <NodeTree
+                data={treeData}
+                selectedId={selectedNode}
+                onSelect={(id) => setSelectedNode(id)}
+                statusLabels={statusLabels}
+                t={t}
+              />
+              <NodeDetail
+                selected={selectedDetail}
+                parentNode={parentNode}
+                statusLabels={statusLabels}
+                diffName={diffName}
+                diffDesc={diffDesc}
+                setDiffName={setDiffName}
+                setDiffDesc={setDiffDesc}
+                onCreateDiff={handleCreateDiff}
+                onBoot={handleBootReboot}
+                onRepair={handleRepair}
+                onDelete={handleDelete}
+                t={t}
+              />
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
   );
 }
 
