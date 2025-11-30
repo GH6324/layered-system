@@ -25,6 +25,7 @@ type Props = {
   message: string;
   admin: boolean | null;
   adminLabel: string;
+  isBusy: (cmd?: string) => boolean;
   t: (key: string, options?: any) => string;
 };
 
@@ -50,6 +51,7 @@ export function WorkspaceGate(props: Props) {
     message,
     admin,
     adminLabel,
+    isBusy,
     t,
   } = props;
   const statusTone = status === "initialized" ? "positive" : status === "error" ? "danger" : "neutral";
@@ -70,7 +72,12 @@ export function WorkspaceGate(props: Props) {
             spellCheck={false}
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Button className="w-full py-3" onClick={onOpenExisting}>
+            <Button
+              className="w-full py-3"
+              onClick={onOpenExisting}
+              disabled={isBusy("init_root")}
+              loading={isBusy("init_root")}
+            >
               {t("init-root")}
             </Button>
           </div>
@@ -125,10 +132,21 @@ export function WorkspaceGate(props: Props) {
             />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Button variant="secondary" className="w-full py-3" onClick={onListWim}>
+            <Button
+              variant="secondary"
+              className="w-full py-3"
+              onClick={onListWim}
+              disabled={isBusy("list_wim_images")}
+              loading={isBusy("list_wim_images")}
+            >
               {t("list-wim-button")}
             </Button>
-            <Button className="w-full py-3" onClick={onCreateWorkspace}>
+            <Button
+              className="w-full py-3"
+              onClick={onCreateWorkspace}
+              disabled={isBusy() || !rootPath.trim()}
+              loading={isBusy("create_base_vhd") || isBusy("init_root")}
+            >
               {t("create-base-button")}
             </Button>
           </div>

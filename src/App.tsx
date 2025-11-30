@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NodeDetail } from "./components/NodeDetail";
 import { NodeTree } from "./components/NodeTree";
@@ -8,6 +8,7 @@ import { Node, Settings, StatusLabels, TreeNode, WimImageInfo } from "./types";
 import { Badge } from "./components/ui/Badge";
 import { Button } from "./components/ui/Button";
 import { Card } from "./components/ui/Card";
+import { useCommandRunner } from "./hooks/useCommandRunner";
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -27,6 +28,8 @@ function App() {
   const [diffDesc, setDiffDesc] = useState("");
   const [selectedNode, setSelectedNode] = useState("");
 
+  const { run: runCommand, isBusy } = useCommandRunner({ setStatus, setMessage, t });
+
   const statusLabels = useMemo<StatusLabels>(
     () => ({
       normal: t("node-status.normal"),
@@ -44,16 +47,15 @@ function App() {
     return admin ? t("admin-yes") : t("admin-no");
   }, [admin, t]);
 
-  const refreshNodes = async () => {
+  const refreshNodes = useCallback(async () => {
     if (!workspaceReady) return;
     try {
-      const list = await invoke<Node[]>("list_nodes");
+      const list = await runCommand<Node[]>("list_nodes");
       setNodes(list);
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // errors are handled in runCommand
     }
-  };
+  }, [workspaceReady, runCommand]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -65,7 +67,7 @@ function App() {
       }
 
       try {
-        const settings = await invoke<Settings | null>("get_settings");
+        const settings = await runCommand<Settings | null>("get_settings");
         if (settings) {
           setRootPath(settings.root_path);
           setStatus("initialized");
@@ -77,9 +79,8 @@ function App() {
           setMessage(t("status-uninitialized"));
           setWorkspaceReady(false);
         }
-      } catch (err) {
-        setStatus("error");
-        setMessage(t("status-error", { msg: String(err) }));
+      } catch {
+        // handled in runCommand
       }
     };
     bootstrap();
@@ -101,8 +102,7 @@ function App() {
   useEffect(() => {
     if (!workspaceReady) return;
     refreshNodes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceReady]);
+  }, [workspaceReady, refreshNodes]);
 
   const treeData = useMemo<TreeNode[]>(() => {
     const map = new Map<string, TreeNode>();
@@ -146,25 +146,24 @@ function App() {
     i18n.changeLanguage(lng);
   };
 
-  const handleListWim = async () => {
+  const handleListWim = useCallback(async () => {
     try {
-      const res = await invoke<WimImageInfo[]>("list_wim_images", { imagePath: wimPath });
+      const res = await runCommand<WimImageInfo[]>("list_wim_images", { imagePath: wimPath });
       setWimImages(res);
       setMessage(t("message-wim-loaded", { count: res.length }));
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [runCommand, t, wimPath]);
 
-  const handleOpenExisting = async () => {
+  const handleOpenExisting = useCallback(async () => {
     if (!rootPath.trim()) {
       setMessage(t("status-error", { msg: t("error-empty-root") }));
       setStatus("error");
       return;
     }
     try {
-      const result = await invoke<{ settings: Settings }>("init_root", {
+      const result = await runCommand<{ settings: Settings }>("init_root", {
         rootPath,
         locale: i18n.language,
       });
@@ -172,24 +171,23 @@ function App() {
       setWorkspaceReady(true);
       setMessage(t("status-initialized", { path: result.settings.root_path }));
       await refreshNodes();
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [rootPath, runCommand, i18n.language, t, refreshNodes]);
 
-  const handleCreateWorkspace = async () => {
+  const handleCreateWorkspace = useCallback(async () => {
     if (!rootPath.trim()) {
       setMessage(t("status-error", { msg: t("error-empty-root") }));
       setStatus("error");
       return;
     }
     try {
-      await invoke<{ settings: Settings }>("init_root", {
+      await runCommand<{ settings: Settings }>("init_root", {
         rootPath,
         locale: i18n.language,
       });
-      const res = await invoke<{ node: Node }>("create_base_vhd", {
+      const res = await runCommand<{ node: Node }>("create_base_vhd", {
         name: baseName,
         desc: baseDesc || null,
         wimFile: wimPath,
@@ -200,73 +198,67 @@ function App() {
       setWorkspaceReady(true);
       setMessage(t("message-base-created", { name: res.node.name }));
       await refreshNodes();
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [rootPath, runCommand, i18n.language, baseName, baseDesc, wimPath, wimIndex, baseSize, t, refreshNodes]);
 
-  const handleCreateDiff = async () => {
+  const handleCreateDiff = useCallback(async () => {
     if (!selectedNode) return;
     try {
-      const res = await invoke<{ node: Node }>("create_diff_vhd", {
+      const res = await runCommand<{ node: Node }>("create_diff_vhd", {
         parentId: selectedNode,
         name: diffName,
         desc: diffDesc || null,
       });
       setMessage(t("message-diff-created", { name: res.node.name }));
       await refreshNodes();
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [selectedNode, runCommand, diffName, diffDesc, t, refreshNodes]);
 
-  const handleCheck = async () => {
+  const handleCheck = useCallback(async () => {
     try {
-      const list = await invoke<Node[]>("scan_workspace");
+      const list = await runCommand<Node[]>("scan_workspace");
       setNodes(list);
       setMessage(t("message-checked"));
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [runCommand, t]);
 
-  const handleBootReboot = async () => {
+  const handleBootReboot = useCallback(async () => {
     if (!selectedNode) return;
     try {
-      await invoke("set_bootsequence_and_reboot", { nodeId: selectedNode });
+      await runCommand("set_bootsequence_and_reboot", { nodeId: selectedNode });
       setMessage(t("message-boot-set"));
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [selectedNode, runCommand, t]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!selectedNode) return;
     try {
-      await invoke("delete_subtree", { nodeId: selectedNode });
+      await runCommand("delete_subtree", { nodeId: selectedNode });
       setMessage(t("message-deleted"));
       await refreshNodes();
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [selectedNode, runCommand, refreshNodes, t]);
 
-  const handleRepair = async () => {
+  const handleRepair = useCallback(async () => {
     if (!selectedNode) return;
     try {
-      const guid = await invoke<string | null>("repair_bcd", { nodeId: selectedNode });
+      const guid = await runCommand<string | null>("repair_bcd", { nodeId: selectedNode });
       setMessage(t("message-repaired-bcd", { guid: guid ?? t("message-no-guid") }));
       await refreshNodes();
-    } catch (err) {
-      setStatus("error");
-      setMessage(t("status-error", { msg: String(err) }));
+    } catch {
+      // handled in runCommand
     }
-  };
+  }, [selectedNode, runCommand, refreshNodes, t]);
 
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 font-sans text-ink-900">
@@ -320,6 +312,7 @@ function App() {
               message={message}
               admin={admin}
               adminLabel={adminLabel}
+              isBusy={isBusy}
               t={t}
             />
           </div>
@@ -333,10 +326,20 @@ function App() {
                 <span className="truncate font-mono text-sm text-ink-700">{rootPath}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" onClick={refreshNodes}>
+                <Button
+                  variant="secondary"
+                  onClick={refreshNodes}
+                  disabled={isBusy("list_nodes")}
+                  loading={isBusy("list_nodes")}
+                >
                   {t("refresh-button")}
                 </Button>
-                <Button variant="secondary" onClick={handleCheck}>
+                <Button
+                  variant="secondary"
+                  onClick={handleCheck}
+                  disabled={isBusy("scan_workspace")}
+                  loading={isBusy("scan_workspace")}
+                >
                   {t("check-button")}
                 </Button>
                 <Badge
@@ -368,6 +371,7 @@ function App() {
                 onBoot={handleBootReboot}
                 onRepair={handleRepair}
                 onDelete={handleDelete}
+                isBusy={isBusy}
                 t={t}
               />
             </div>

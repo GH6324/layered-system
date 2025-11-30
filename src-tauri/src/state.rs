@@ -10,15 +10,23 @@ use crate::{
     paths::AppPaths,
 };
 
-#[derive(Default)]
+#[derive(Clone)]
 pub struct SharedState {
-    inner: RwLock<StateInner>,
+    inner: Arc<RwLock<StateInner>>,
 }
 
 #[derive(Default)]
 struct StateInner {
     paths: Option<AppPaths>,
     db: Option<Arc<Database>>,
+}
+
+impl Default for SharedState {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(StateInner::default())),
+        }
+    }
 }
 
 impl SharedState {

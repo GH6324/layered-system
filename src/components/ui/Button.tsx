@@ -5,6 +5,7 @@ type ButtonVariant = "primary" | "secondary" | "danger";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
+  loading?: boolean;
 };
 
 const base =
@@ -19,6 +20,27 @@ const variants: Record<ButtonVariant, string> = {
     "border border-rose-500 bg-rose-500 text-white shadow-md shadow-rose-400/40 hover:-translate-y-0.5 hover:bg-rose-600 focus-visible:outline-rose-400",
 };
 
-export function Button({ variant = "primary", className, type = "button", ...props }: ButtonProps) {
-  return <button type={type} className={cn(base, variants[variant], className)} {...props} />;
+export function Button({
+  variant = "primary",
+  className,
+  type = "button",
+  loading = false,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
+  const isDisabled = disabled || loading;
+  return (
+    <button
+      type={type}
+      className={cn(base, variants[variant], className, "gap-2")}
+      disabled={isDisabled}
+      {...props}
+    >
+      {loading && (
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-current" aria-hidden />
+      )}
+      <span className="whitespace-nowrap">{children}</span>
+    </button>
+  );
 }

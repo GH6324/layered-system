@@ -23,12 +23,12 @@ use crate::sys::{run_elevated_command, CommandOutput};
 use crate::temp::TempManager;
 use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
 
-pub struct WorkspaceService<'a> {
-    state: &'a SharedState,
+pub struct WorkspaceService {
+    state: SharedState,
 }
 
-impl<'a> WorkspaceService<'a> {
-    pub fn new(state: &'a SharedState) -> Self {
+impl WorkspaceService {
+    pub fn new(state: SharedState) -> Self {
         Self { state }
     }
 

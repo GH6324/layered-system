@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { statusToneFor } from "../lib/tone";
 import { Node, StatusLabels } from "../types";
 import { Badge } from "./ui/Badge";
@@ -17,6 +18,7 @@ type Props = {
   onBoot: () => void;
   onRepair: () => void;
   onDelete: () => void;
+  isBusy: (cmd?: string) => boolean;
   t: (key: string, options?: any) => string;
 };
 
@@ -32,9 +34,15 @@ export function NodeDetail({
   onBoot,
   onRepair,
   onDelete,
+  isBusy,
   t,
 }: Props) {
   const sectionClass = "rounded-xl border border-white/70 bg-white/80 p-4 shadow-sm shadow-peach-300/25";
+  const createdAtLocal = useMemo(() => {
+    if (!selected?.created_at) return "";
+    const parsed = new Date(selected.created_at);
+    return Number.isNaN(parsed.getTime()) ? selected.created_at : parsed.toLocaleString();
+  }, [selected?.created_at]);
 
   if (!selected)
     return (
@@ -64,10 +72,10 @@ export function NodeDetail({
                 {t("detail-bcd")}
               </span>
               <span className="font-mono text-ink-900">{selected.bcd_guid ?? t("common-missing")}</span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink-700">
-                {t("detail-created-at")}
-              </span>
-              <span className="text-ink-900">{selected.created_at}</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-700">
+              {t("detail-created-at")}
+            </span>
+            <span className="text-ink-900">{createdAtLocal}</span>
               <span className="text-xs font-semibold uppercase tracking-wide text-ink-700">
                 {t("detail-status")}
               </span>
@@ -107,7 +115,11 @@ export function NodeDetail({
               />
             </div>
             <div className="mt-3 flex justify-end">
-              <Button onClick={onCreateDiff}>
+              <Button
+                onClick={onCreateDiff}
+                disabled={!diffName.trim() || isBusy("create_diff_vhd")}
+                loading={isBusy("create_diff_vhd")}
+              >
                 {t("create-diff-button")}
               </Button>
             </div>
@@ -116,13 +128,18 @@ export function NodeDetail({
           <div className={sectionClass}>
             <h4 className="text-lg font-semibold text-ink-900">{t("node-actions")}</h4>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Button variant="secondary" onClick={onBoot}>
+              <Button
+                variant="secondary"
+                onClick={onBoot}
+                disabled={isBusy("set_bootsequence_and_reboot")}
+                loading={isBusy("set_bootsequence_and_reboot")}
+              >
                 {t("set-boot-button")}
               </Button>
-              <Button variant="secondary" onClick={onRepair}>
+              <Button variant="secondary" onClick={onRepair} disabled={isBusy("repair_bcd")} loading={isBusy("repair_bcd")}>
                 {t("repair-bcd-button")}
               </Button>
-              <Button variant="danger" onClick={onDelete}>
+              <Button variant="danger" onClick={onDelete} disabled={isBusy("delete_subtree")} loading={isBusy("delete_subtree")}>
                 {t("delete-subtree-button")}
               </Button>
             </div>
