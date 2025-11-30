@@ -54,6 +54,7 @@
   "check-button": "检查",
   "node-detail-title": "节点详情",
   "node-detail-empty": "未选择",
+  "node-actions": "操作",
   "detail-parent": "父节点",
   "detail-path": "路径",
   "detail-bcd": "BCD GUID",

@@ -24,7 +24,6 @@ export function NodeTree({ data, selectedId, onSelect, statusLabels, t }: Props)
                 <span className={`pill tiny status-${node.status}`}>{statusLabels[node.status]}</span>
               </div>
               <div className="node-meta">
-                <span className="mono">{node.id}</span>
                 <span className={`chip ${node.boot_files_ready ? "ok" : "warn"}`}>
                   {node.boot_files_ready ? t("boot-ready-short") : t("boot-not-ready-short")}
                 </span>
@@ -37,5 +36,9 @@ export function NodeTree({ data, selectedId, onSelect, statusLabels, t }: Props)
     );
   };
 
-  return <div className="tree-pane">{renderTree(data)}</div>;
+  return (
+    <div className="tree-pane">
+      <div className="pane-content">{renderTree(data)}</div>
+    </div>
+  );
 }

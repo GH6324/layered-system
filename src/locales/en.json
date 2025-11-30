@@ -54,6 +54,7 @@
   "check-button": "Check",
   "node-detail-title": "Node detail",
   "node-detail-empty": "Not selected",
+  "node-actions": "Actions",
   "detail-parent": "Parent",
   "detail-path": "Path",
   "detail-bcd": "BCD GUID",

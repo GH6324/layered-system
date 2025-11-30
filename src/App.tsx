@@ -307,52 +307,47 @@ function App() {
           t={t}
         />
       ) : (
-        <>
-          <section className="card">
-            <div className="row">
-              <span className="label">{t("admin-status", { status: "" })}</span>
+        <section className="workspace-main">
+          <div className="topbar">
+            <div className="topbar-left">
               <span className={`pill ${admin ? "ok" : "warn"}`}>{adminLabel}</span>
-              <span className="mono">{rootPath}</span>
-              <div className="row-actions">
-                <button className="ghost-btn" onClick={refreshNodes}>
-                  {t("refresh-button")}
-                </button>
-                <button className="ghost-btn" onClick={handleCheck}>
-                  {t("check-button")}
-                </button>
-              </div>
+              <span className="mono truncate">{rootPath}</span>
             </div>
-            <div className={`message ${status}`}>
-              <span>{message}</span>
+            <div className="topbar-right">
+              <button className="ghost-btn" onClick={refreshNodes}>
+                {t("refresh-button")}
+              </button>
+              <button className="ghost-btn" onClick={handleCheck}>
+                {t("check-button")}
+              </button>
+              <span className={`message-chip ${status}`}>{message}</span>
             </div>
-          </section>
+          </div>
 
-          <section className="card">
-            <div className="node-panels">
-              <NodeTree
-                data={treeData}
-                selectedId={selectedNode}
-                onSelect={(id) => setSelectedNode(id)}
-                statusLabels={statusLabels}
-                t={t}
-              />
-              <NodeDetail
-                selected={selectedDetail}
-                parentNode={parentNode}
-                statusLabels={statusLabels}
-                diffName={diffName}
-                diffDesc={diffDesc}
-                setDiffName={setDiffName}
-                setDiffDesc={setDiffDesc}
-                onCreateDiff={handleCreateDiff}
-                onBoot={handleBootReboot}
-                onRepair={handleRepair}
-                onDelete={handleDelete}
-                t={t}
-              />
-            </div>
-          </section>
-        </>
+          <div className="node-panels">
+            <NodeTree
+              data={treeData}
+              selectedId={selectedNode}
+              onSelect={(id) => setSelectedNode(id)}
+              statusLabels={statusLabels}
+              t={t}
+            />
+            <NodeDetail
+              selected={selectedDetail}
+              parentNode={parentNode}
+              statusLabels={statusLabels}
+              diffName={diffName}
+              diffDesc={diffDesc}
+              setDiffName={setDiffName}
+              setDiffDesc={setDiffDesc}
+              onCreateDiff={handleCreateDiff}
+              onBoot={handleBootReboot}
+              onRepair={handleRepair}
+              onDelete={handleDelete}
+              t={t}
+            />
+          </div>
+        </section>
       )}
     </main>
   );
