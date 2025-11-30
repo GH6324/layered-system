@@ -475,13 +475,14 @@ impl WorkspaceService {
                 // let _ = fs::remove_file(&node.path);
             }
         }
+        db.delete_ops_for_nodes(&order)?;
         db.delete_nodes(&order)?;
         db.insert_op(
             &Uuid::new_v4().to_string(),
-            Some(node_id),
+            None,
             "delete_subtree",
             "ok",
-            "",
+            &format!("node_id={}", node_id),
         )?;
         info!("delete_subtree node={node_id} count={}", order.len());
         Ok(())

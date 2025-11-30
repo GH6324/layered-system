@@ -256,9 +256,20 @@ impl Database {
         if ids.is_empty() {
             return Ok(());
         }
-        let mut conn = self.connection();
+        let conn = self.connection();
         for id in ids {
             conn.execute("DELETE FROM nodes WHERE id = ?1", params![id])?;
+        }
+        Ok(())
+    }
+
+    pub fn delete_ops_for_nodes(&self, node_ids: &[String]) -> Result<()> {
+        if node_ids.is_empty() {
+            return Ok(());
+        }
+        let conn = self.connection();
+        for id in node_ids {
+            conn.execute("DELETE FROM ops WHERE node_id = ?1", params![id])?;
         }
         Ok(())
     }
