@@ -8,6 +8,7 @@ use crate::{
     db::AppSettings,
     error::AppError,
     models::{Node, WimImageInfo},
+    recents::{self, RecentStatus, RecentWorkspace},
     state::SharedState,
     workspace::WorkspaceService,
 };
@@ -46,13 +47,32 @@ pub async fn init_root(
     root_path: String,
     locale: Option<String>,
     state: State<'_, SharedState>,
+    app: tauri::AppHandle,
 ) -> CmdResult<InitResult> {
     let root_path = PathBuf::from(root_path);
+    let app = app.clone();
     let state = state.inner().clone();
     run_blocking_cmd(move || {
+        let root_for_log = root_path.clone();
         let settings = state
-            .initialize(root_path, locale)
-            .map_err(|e| e.to_string())?;
+            .initialize(root_path.clone(), locale)
+            .map_err(|e| {
+                let _ = recents::touch(
+                    &app,
+                    root_for_log.clone(),
+                    RecentStatus::InitFailed,
+                    None,
+                    None,
+                );
+                e.to_string()
+            })?;
+        let _ = recents::touch(
+            &app,
+            root_for_log,
+            RecentStatus::Ok,
+            Some(settings.locale.clone()),
+            None,
+        );
         Ok(InitResult { settings })
     })
     .await
@@ -100,6 +120,24 @@ pub async fn list_wim_images(
         svc.list_wim_images(&image_path).map_err(|e| e.to_string())
     })
     .await
+}
+
+#[tauri::command]
+pub async fn list_recent_workspaces(app: tauri::AppHandle) -> CmdResult<Vec<RecentWorkspace>> {
+    let app = app.clone();
+    run_blocking_cmd(move || recents::list(&app).map_err(|e| e.to_string())).await
+}
+
+#[tauri::command]
+pub async fn remove_recent_workspace(path: String, app: tauri::AppHandle) -> CmdResult<()> {
+    let app = app.clone();
+    run_blocking_cmd(move || recents::remove(&app, &path).map_err(|e| e.to_string())).await
+}
+
+#[tauri::command]
+pub async fn clear_recent_workspaces(app: tauri::AppHandle) -> CmdResult<()> {
+    let app = app.clone();
+    run_blocking_cmd(move || recents::clear(&app).map_err(|e| e.to_string())).await
 }
 
 #[derive(Serialize)]

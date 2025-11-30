@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { NodeDetail } from "./components/NodeDetail";
 import { NodeTree } from "./components/NodeTree";
 import { WorkspaceGate } from "./components/WorkspaceGate";
-import { Node, Settings, StatusLabels, TreeNode, WimImageInfo } from "./types";
+import { Node, RecentWorkspace, Settings, StatusLabels, TreeNode, WimImageInfo } from "./types";
 import { Badge } from "./components/ui/Badge";
 import { Button } from "./components/ui/Button";
 import { Card } from "./components/ui/Card";
@@ -18,6 +18,7 @@ function App() {
   const [status, setStatus] = useState<"idle" | "initialized" | "error">("idle");
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
+  const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const [baseName, setBaseName] = useState("base");
   const [baseSize, setBaseSize] = useState(60);
   const [baseDesc, setBaseDesc] = useState("");
@@ -58,6 +59,15 @@ function App() {
     }
   }, [workspaceReady, runCommand]);
 
+  const refreshRecents = useCallback(async () => {
+    try {
+      const list = await runCommand<RecentWorkspace[]>("list_recent_workspaces");
+      setRecents(list);
+    } catch {
+      // handled in runCommand
+    }
+  }, [runCommand]);
+
   useEffect(() => {
     const bootstrap = async () => {
       try {
@@ -65,6 +75,12 @@ function App() {
         setAdmin(isAdmin);
       } catch (err) {
         setAdmin(false);
+      }
+
+      try {
+        await refreshRecents();
+      } catch {
+        // handled in runCommand
       }
 
       try {
@@ -158,35 +174,45 @@ function App() {
     }
   }, [runCommand, t, wimPath]);
 
-  const handleOpenExisting = useCallback(async () => {
-    if (!rootPath.trim()) {
-      setMessage(t("status-error", { msg: t("error-empty-root") }));
-      setStatus("error");
-      return;
-    }
-    try {
-      const result = await runCommand<{ settings: Settings }>("init_root", {
-        rootPath,
-        locale: i18n.language,
-      });
-      setStatus("initialized");
-      setWorkspaceReady(true);
-      setMessage(t("status-initialized", { path: result.settings.root_path }));
-      await refreshNodes();
-    } catch {
-      // handled in runCommand
-    }
-  }, [rootPath, runCommand, i18n.language, t, refreshNodes]);
+  const handleOpenExisting = useCallback(
+    async (pathOverride?: unknown) => {
+      const rawPath = typeof pathOverride === "string" ? pathOverride : rootPath;
+      const targetPath = (rawPath || "").trim();
+      setRootPath(targetPath);
+      if (!targetPath) {
+        setMessage(t("status-error", { msg: t("error-empty-root") }));
+        setStatus("error");
+        return;
+      }
+      try {
+        const result = await runCommand<{ settings: Settings }>("init_root", {
+          rootPath: targetPath,
+          locale: i18n.language,
+        });
+        setStatus("initialized");
+        setWorkspaceReady(true);
+        setMessage(t("status-initialized", { path: result.settings.root_path }));
+        await refreshNodes();
+      } catch {
+        // handled in runCommand
+      } finally {
+        await refreshRecents();
+      }
+    },
+    [rootPath, runCommand, i18n.language, t, refreshNodes, refreshRecents],
+  );
 
   const handleCreateWorkspace = useCallback(async () => {
-    if (!rootPath.trim()) {
+    const targetPath = rootPath.trim();
+    setRootPath(targetPath);
+    if (!targetPath) {
       setMessage(t("status-error", { msg: t("error-empty-root") }));
       setStatus("error");
       return;
     }
     try {
       await runCommand<{ settings: Settings }>("init_root", {
-        rootPath,
+        rootPath: targetPath,
         locale: i18n.language,
       });
       const res = await runCommand<{ node: Node }>("create_base_vhd", {
@@ -202,8 +228,10 @@ function App() {
       await refreshNodes();
     } catch {
       // handled in runCommand
+    } finally {
+      await refreshRecents();
     }
-  }, [rootPath, runCommand, i18n.language, baseName, baseDesc, wimPath, wimIndex, baseSize, t, refreshNodes]);
+  }, [rootPath, runCommand, i18n.language, baseName, baseDesc, wimPath, wimIndex, baseSize, t, refreshNodes, refreshRecents]);
 
   const handleCreateDiff = useCallback(async () => {
     if (!selectedNode) return;
@@ -302,7 +330,36 @@ function App() {
     setStatus("idle");
     setMessage(t("message-workspace-closed"));
     setRootPath("");
-  }, [t]);
+    refreshRecents().catch(() => {});
+  }, [t, refreshRecents]);
+
+  const handleUseRecent = useCallback(
+    async (path: string) => {
+      await handleOpenExisting(path);
+    },
+    [handleOpenExisting],
+  );
+
+  const handleRemoveRecent = useCallback(
+    async (path: string) => {
+      try {
+        await runCommand("remove_recent_workspace", { path });
+        await refreshRecents();
+      } catch {
+        // handled in runCommand
+      }
+    },
+    [runCommand, refreshRecents],
+  );
+
+  const handleClearRecents = useCallback(async () => {
+    try {
+      await runCommand("clear_recent_workspaces");
+      await refreshRecents();
+    } catch {
+      // handled in runCommand
+    }
+  }, [runCommand, refreshRecents]);
 
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-peach-50 via-peach-200/50 to-peach-400/40 font-sans text-ink-900">
@@ -349,8 +406,13 @@ function App() {
               baseDesc={baseDesc}
               setBaseDesc={setBaseDesc}
               wimImages={wimImages}
+              recents={recents}
               onListWim={handleListWim}
               onOpenExisting={handleOpenExisting}
+              onUseRecent={handleUseRecent}
+              onRemoveRecent={handleRemoveRecent}
+              onClearRecents={handleClearRecents}
+              onRefreshRecents={refreshRecents}
               onCreateWorkspace={handleCreateWorkspace}
               status={status}
               message={message}

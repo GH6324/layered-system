@@ -1,4 +1,4 @@
-import { WimImageInfo } from "../types";
+import { RecentWorkspace, WimImageInfo } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
@@ -18,8 +18,13 @@ type Props = {
   baseDesc: string;
   setBaseDesc: (v: string) => void;
   wimImages: WimImageInfo[];
+  recents: RecentWorkspace[];
   onListWim: () => Promise<void>;
-  onOpenExisting: () => Promise<void>;
+  onOpenExisting: (path?: string) => Promise<void>;
+  onUseRecent: (path: string) => Promise<void>;
+  onRemoveRecent: (path: string) => Promise<void>;
+  onClearRecents: () => Promise<void>;
+  onRefreshRecents: () => Promise<void>;
   onCreateWorkspace: () => Promise<void>;
   status: "idle" | "initialized" | "error";
   message: string;
@@ -44,8 +49,13 @@ export function WorkspaceGate(props: Props) {
     baseDesc,
     setBaseDesc,
     wimImages,
+    recents,
     onListWim,
     onOpenExisting,
+    onUseRecent,
+    onRemoveRecent,
+    onClearRecents,
+    onRefreshRecents,
     onCreateWorkspace,
     status,
     message,
@@ -55,6 +65,23 @@ export function WorkspaceGate(props: Props) {
     t,
   } = props;
   const statusTone = status === "initialized" ? "positive" : status === "error" ? "danger" : "neutral";
+  const recentTone = (state: RecentWorkspace["last_status"]) => {
+    switch (state) {
+      case "ok":
+        return "positive";
+      case "missing_root":
+        return "danger";
+      case "missing_state_db":
+      case "init_failed":
+        return "warn";
+      default:
+        return "neutral";
+    }
+  };
+  const recentTime = (time: string) => {
+    const parsed = new Date(time);
+    return Number.isNaN(parsed.getTime()) ? time : parsed.toLocaleString();
+  };
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -74,13 +101,95 @@ export function WorkspaceGate(props: Props) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Button
               className="w-full py-3"
-              onClick={onOpenExisting}
-              disabled={isBusy("init_root")}
+              onClick={() => onOpenExisting()}
+              disabled={isBusy()}
               loading={isBusy("init_root")}
             >
               {t("init-root")}
             </Button>
           </div>
+        </div>
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-ink-800">{t("recent-title")}</h4>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                className="px-3 py-1 text-xs"
+                onClick={onRefreshRecents}
+                disabled={isBusy()}
+                loading={isBusy("list_recent_workspaces")}
+              >
+                {t("recent-refresh")}
+              </Button>
+              <Button
+                variant="secondary"
+                className="px-3 py-1 text-xs"
+                onClick={onClearRecents}
+                disabled={isBusy() || recents.length === 0}
+                loading={isBusy("clear_recent_workspaces")}
+              >
+                {t("recent-clear")}
+              </Button>
+            </div>
+          </div>
+          {recents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-peach-200/70 bg-white/70 px-3 py-4 text-sm text-ink-700 shadow-inner shadow-peach-200/30">
+              {t("recent-empty")}
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              {recents.map((item) => (
+                <div
+                  key={item.path}
+                  className="rounded-xl border border-peach-200/70 bg-white/80 p-3 shadow-sm shadow-peach-300/20"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1 space-y-1">
+                      <button
+                        type="button"
+                        className="text-left"
+                        onClick={() => onUseRecent(item.path)}
+                        disabled={isBusy()}
+                      >
+                        <p className="truncate text-sm font-semibold text-ink-900">{item.path}</p>
+                        <p className="text-xs text-ink-700">
+                          {t("recent-last-opened", { time: recentTime(item.last_opened_at) })}
+                        </p>
+                      </button>
+                      {item.node_count ? (
+                        <p className="text-xs text-ink-700">
+                          {t("recent-node-count", { count: item.node_count })}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Badge tone={recentTone(item.last_status)} className="px-3 py-1">
+                      {t(`recent-status.${item.last_status}`)}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      className="px-3 py-1 text-xs"
+                      onClick={() => onUseRecent(item.path)}
+                      disabled={isBusy()}
+                      loading={isBusy("init_root")}
+                    >
+                      {t("recent-open")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-1 text-xs"
+                      onClick={() => onRemoveRecent(item.path)}
+                      disabled={isBusy()}
+                      loading={isBusy("remove_recent_workspace")}
+                    >
+                      {t("recent-remove")}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <Badge tone={statusTone} className="mt-3 w-full justify-start px-4 py-3 text-sm font-semibold">
           {message}

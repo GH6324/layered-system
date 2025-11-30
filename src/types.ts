@@ -34,3 +34,14 @@ export type WimImageInfo = {
 
 export type TreeNode = Node & { children: TreeNode[] };
 export type StatusLabels = Record<NodeStatus, string>;
+
+export type RecentStatus = "ok" | "missing_root" | "missing_state_db" | "init_failed";
+
+export type RecentWorkspace = {
+  path: string;
+  last_opened_at: string;
+  pinned: boolean;
+  last_status: RecentStatus;
+  node_count?: number;
+  locale?: string;
+};

@@ -7,6 +7,7 @@ mod error;
 mod logging;
 mod models;
 mod paths;
+mod recents;
 mod state;
 mod sys;
 mod temp;
@@ -28,6 +29,9 @@ pub fn run() {
             commands::scan_workspace,
             commands::list_nodes,
             commands::list_wim_images,
+            commands::list_recent_workspaces,
+            commands::remove_recent_workspace,
+            commands::clear_recent_workspaces,
             commands::create_base_vhd,
             commands::create_diff_vhd,
             commands::set_bootsequence_and_reboot,

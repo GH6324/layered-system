@@ -25,6 +25,20 @@
   "message-no-guid": "无 GUID",
   "message-workspace-closed": "工作区已关闭。",
   "close-workspace": "关闭工作区",
+  "recent-title": "最近空间",
+  "recent-refresh": "刷新",
+  "recent-clear": "清空",
+  "recent-empty": "暂无记录，初始化或打开后会出现在这里",
+  "recent-last-opened": "上次打开：{{time}}",
+  "recent-node-count": "记录节点：{{count}} 个",
+  "recent-open": "打开",
+  "recent-remove": "移除",
+  "recent-status": {
+    "ok": "可用",
+    "missing_root": "路径不存在",
+    "missing_state_db": "缺少 state.db",
+    "init_failed": "上次初始化失败"
+  },
   "node-status": {
     "normal": "正常",
     "missing-file": "缺少文件",

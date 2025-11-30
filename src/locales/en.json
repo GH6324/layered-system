@@ -25,6 +25,20 @@
   "message-no-guid": "no guid",
   "message-workspace-closed": "Workspace closed.",
   "close-workspace": "Close workspace",
+  "recent-title": "Recent workspaces",
+  "recent-refresh": "Refresh",
+  "recent-clear": "Clear",
+  "recent-empty": "No recent workspaces",
+  "recent-last-opened": "Last opened: {{time}}",
+  "recent-node-count": "{{count}} nodes recorded",
+  "recent-open": "Open",
+  "recent-remove": "Remove",
+  "recent-status": {
+    "ok": "Ready",
+    "missing_root": "Missing path",
+    "missing_state_db": "Missing state.db",
+    "init_failed": "Last init failed"
+  },
   "node-status": {
     "normal": "Normal",
     "missing-file": "Missing file",
