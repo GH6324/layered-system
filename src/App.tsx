@@ -54,14 +54,17 @@ function App() {
   const [selectedNode, setSelectedNode] = useState("");
 
   type TreeNode = Node & { children: TreeNode[] };
-  const statusLabels: Record<NodeStatus, string> = {
-    normal: "正常",
-    missing_file: "缺少文件",
-    missing_parent: "缺少父节点",
-    missing_bcd: "缺少 BCD",
-    mounted: "已挂载",
-    error: "错误",
-  };
+  const statusLabels = useMemo<Record<NodeStatus, string>>(
+    () => ({
+      normal: t("node-status.normal"),
+      missing_file: t("node-status.missing-file"),
+      missing_parent: t("node-status.missing-parent"),
+      missing_bcd: t("node-status.missing-bcd"),
+      mounted: t("node-status.mounted"),
+      error: t("node-status.error"),
+    }),
+    [t],
+  );
 
   const adminLabel = useMemo(() => {
     if (admin === null) return "...";
@@ -69,6 +72,7 @@ function App() {
   }, [admin, t]);
 
   useEffect(() => {
+    // Run only once on mount to avoid repeated bootstraps that would spam diskpart.
     const bootstrap = async () => {
       try {
         const isAdmin = await invoke<boolean>("check_admin");
@@ -94,7 +98,7 @@ function App() {
       }
     };
     bootstrap();
-  }, [i18n, t]);
+  }, []);
 
   useEffect(() => {
     if (status === "idle") {
@@ -116,7 +120,7 @@ function App() {
 
   const handleInit = async () => {
     if (!rootPath.trim()) {
-      setMessage(t("status-error", { msg: "Root path is empty" }));
+      setMessage(t("status-error", { msg: t("error-empty-root") }));
       setStatus("error");
       return;
     }
@@ -142,7 +146,7 @@ function App() {
     try {
       const res = await invoke<WimImageInfo[]>("list_wim_images", { imagePath: wimPath });
       setWimImages(res);
-      setMessage(`WIM images loaded (${res.length})`);
+      setMessage(t("message-wim-loaded", { count: res.length }));
     } catch (err) {
       setStatus("error");
       setMessage(t("status-error", { msg: String(err) }));
@@ -158,7 +162,7 @@ function App() {
         wimIndex,
         sizeGb: baseSize,
       });
-      setMessage(`Base created: ${res.node.name}`);
+      setMessage(t("message-base-created", { name: res.node.name }));
       await refreshNodes();
     } catch (err) {
       setStatus("error");
@@ -173,7 +177,7 @@ function App() {
         name: diffName,
         desc: diffDesc || null,
       });
-      setMessage(`Diff created: ${res.node.name}`);
+      setMessage(t("message-diff-created", { name: res.node.name }));
       await refreshNodes();
     } catch (err) {
       setStatus("error");
@@ -185,7 +189,7 @@ function App() {
     if (!selectedNode) return;
     try {
       await invoke("set_bootsequence_and_reboot", { nodeId: selectedNode });
-      setMessage("Boot sequence set, rebooting...");
+      setMessage(t("message-boot-set"));
     } catch (err) {
       setStatus("error");
       setMessage(t("status-error", { msg: String(err) }));
@@ -196,7 +200,7 @@ function App() {
     if (!selectedNode) return;
     try {
       await invoke("delete_subtree", { nodeId: selectedNode });
-      setMessage("Deleted subtree.");
+      setMessage(t("message-deleted"));
       await refreshNodes();
     } catch (err) {
       setStatus("error");
@@ -208,7 +212,7 @@ function App() {
     if (!selectedNode) return;
     try {
       const guid = await invoke<string | null>("repair_bcd", { nodeId: selectedNode });
-      setMessage(`Repaired BCD: ${guid ?? "no guid"}`);
+      setMessage(t("message-repaired-bcd", { guid: guid ?? t("message-no-guid") }));
       await refreshNodes();
     } catch (err) {
       setStatus("error");
@@ -263,7 +267,7 @@ function App() {
   }, [nodes, selectedNode]);
 
   const renderTree = (list: TreeNode[]) => {
-    if (!list.length) return <div className="empty">暂无节点</div>;
+    if (!list.length) return <div className="empty">{t("tree-empty")}</div>;
     return (
       <ul className="tree-list">
         {list.map((node) => (
@@ -279,7 +283,7 @@ function App() {
               <div className="node-meta">
                 <span className="mono">{node.id}</span>
                 <span className={`chip ${node.boot_files_ready ? "ok" : "warn"}`}>
-                  {node.boot_files_ready ? "引导已写" : "引导未写"}
+                  {node.boot_files_ready ? t("boot-ready-short") : t("boot-not-ready-short")}
                 </span>
               </div>
             </div>
@@ -330,17 +334,17 @@ function App() {
       </section>
 
       <section className="card">
-        <h3>初始化基础盘</h3>
+        <h3>{t("section-base-title")}</h3>
         <div className="form column">
           <input
             value={wimPath}
             onChange={(e) => setWimPath(e.target.value)}
-            placeholder="WIM/ESD 路径"
+            placeholder={t("wim-path-placeholder")}
             spellCheck={false}
           />
           <div className="form split">
             <label>
-              Index
+              {t("wim-index-label")}
               <input
                 type="number"
                 min={1}
@@ -349,7 +353,7 @@ function App() {
               />
             </label>
             <label>
-              Size(GB)
+              {t("base-size-label")}
               <input
                 type="number"
                 min={20}
@@ -359,12 +363,20 @@ function App() {
             </label>
           </div>
           <div className="form split">
-            <input value={baseName} onChange={(e) => setBaseName(e.target.value)} placeholder="名称" />
-            <input value={baseDesc} onChange={(e) => setBaseDesc(e.target.value)} placeholder="描述（可选）" />
+            <input
+              value={baseName}
+              onChange={(e) => setBaseName(e.target.value)}
+              placeholder={t("base-name-placeholder")}
+            />
+            <input
+              value={baseDesc}
+              onChange={(e) => setBaseDesc(e.target.value)}
+              placeholder={t("base-desc-placeholder")}
+            />
           </div>
           <div className="form split">
-            <button onClick={handleListWim}>列出镜像</button>
-            <button onClick={handleCreateBase}>创建基础盘</button>
+            <button onClick={handleListWim}>{t("list-wim-button")}</button>
+            <button onClick={handleCreateBase}>{t("create-base-button")}</button>
           </div>
           {wimImages.length > 0 && (
             <div className="wim-list">
@@ -380,10 +392,10 @@ function App() {
       </section>
 
       <section className="card">
-        <h3>创建差分盘</h3>
+        <h3>{t("section-diff-title")}</h3>
         <div className="form column">
           <select value={diffParent} onChange={(e) => setDiffParent(e.target.value)}>
-            <option value="">选择父节点</option>
+            <option value="">{t("diff-parent-placeholder")}</option>
             {nodes.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name} ({n.id.slice(0, 6)})
@@ -391,70 +403,84 @@ function App() {
             ))}
           </select>
           <div className="form split">
-            <input value={diffName} onChange={(e) => setDiffName(e.target.value)} placeholder="名称" />
-            <input value={diffDesc} onChange={(e) => setDiffDesc(e.target.value)} placeholder="描述（可选）" />
+            <input
+              value={diffName}
+              onChange={(e) => setDiffName(e.target.value)}
+              placeholder={t("diff-name-placeholder")}
+            />
+            <input
+              value={diffDesc}
+              onChange={(e) => setDiffDesc(e.target.value)}
+              placeholder={t("diff-desc-placeholder")}
+            />
           </div>
-          <button onClick={handleCreateDiff}>创建差分</button>
+          <button onClick={handleCreateDiff}>{t("create-diff-button")}</button>
         </div>
       </section>
 
       <section className="card">
-        <h3>节点管理</h3>
-        <p className="muted">使用树状视图浏览差分链，点击节点查看详情与操作。</p>
+        <h3>{t("section-node-title")}</h3>
+        <p className="muted">{t("node-management-tip")}</p>
         <div className="node-panels">
           <div className="tree-pane">
             <div className="pane-head">
-              <span>节点树</span>
+              <span>{t("node-tree-title")}</span>
               <button className="ghost-btn" onClick={refreshNodes}>
-                刷新
+                {t("refresh-button")}
               </button>
             </div>
             {renderTree(treeData)}
           </div>
           <div className="detail-pane">
             <div className="pane-head">
-              <span>节点详情</span>
-              {selectedDetail ? <span className="muted">{selectedDetail.name}</span> : <span className="muted">未选择</span>}
+              <span>{t("node-detail-title")}</span>
+              {selectedDetail ? (
+                <span className="muted">{selectedDetail.name}</span>
+              ) : (
+                <span className="muted">{t("node-detail-empty")}</span>
+              )}
             </div>
             {selectedDetail ? (
               <>
                 <div className="detail-grid">
                   <span className="detail-label">ID</span>
                   <span className="detail-value mono">{selectedDetail.id}</span>
-                  <span className="detail-label">父节点</span>
-                  <span className="detail-value">{parentNode ? `${parentNode.name} (${parentNode.id})` : "无"}</span>
-                  <span className="detail-label">路径</span>
+                  <span className="detail-label">{t("detail-parent")}</span>
+                  <span className="detail-value">
+                    {parentNode ? `${parentNode.name} (${parentNode.id})` : t("common-none")}
+                  </span>
+                  <span className="detail-label">{t("detail-path")}</span>
                   <span className="detail-value mono">{selectedDetail.path}</span>
-                  <span className="detail-label">BCD GUID</span>
-                  <span className="detail-value mono">{selectedDetail.bcd_guid ?? "缺失"}</span>
-                  <span className="detail-label">创建时间</span>
+                  <span className="detail-label">{t("detail-bcd")}</span>
+                  <span className="detail-value mono">{selectedDetail.bcd_guid ?? t("common-missing")}</span>
+                  <span className="detail-label">{t("detail-created-at")}</span>
                   <span className="detail-value">{selectedDetail.created_at}</span>
-                  <span className="detail-label">状态</span>
+                  <span className="detail-label">{t("detail-status")}</span>
                   <span className="detail-value status-line">
                     <span className={`pill tiny status-${selectedDetail.status}`}>
                       {statusLabels[selectedDetail.status]}
                     </span>
                     <span className={`chip ${selectedDetail.boot_files_ready ? "ok" : "warn"}`}>
-                      {selectedDetail.boot_files_ready ? "引导文件已写" : "引导文件未写"}
+                      {selectedDetail.boot_files_ready ? t("boot-ready") : t("boot-not-ready")}
                     </span>
                   </span>
-                  <span className="detail-label">描述</span>
-                  <span className="detail-value">{selectedDetail.desc || "无"}</span>
+                  <span className="detail-label">{t("detail-desc")}</span>
+                  <span className="detail-value">{selectedDetail.desc || t("common-none")}</span>
                 </div>
                 <div className="form column tight">
                   <div className="form split">
-                    <button onClick={handleBootReboot}>设置下次启动并重启</button>
-                    <button onClick={handleRepair}>修复 BCD</button>
+                    <button onClick={handleBootReboot}>{t("set-boot-button")}</button>
+                    <button onClick={handleRepair}>{t("repair-bcd-button")}</button>
                   </div>
                   <div className="form split">
                     <button className="danger" onClick={handleDelete}>
-                      删除子树
+                      {t("delete-subtree-button")}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="empty">请选择左侧节点</div>
+              <div className="empty">{t("detail-empty")}</div>
             )}
           </div>
         </div>
