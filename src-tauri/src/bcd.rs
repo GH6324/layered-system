@@ -13,6 +13,24 @@ pub fn run_bcdboot(system_dir: &Path) -> Result<CommandOutput> {
     run_elevated_command("bcdboot", &[&sys_arg, "/d"], None)
 }
 
+/// Run bcdboot targeting a specific EFI partition while still using UEFI firmware.
+pub fn run_bcdboot_to_efi(system_dir: &Path, efi_dir: &Path) -> Result<CommandOutput> {
+    let sys_path = system_dir
+        .to_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| system_dir.to_string_lossy().to_string());
+    let sys_arg = format!("{sys_path}\\Windows");
+    let efi_arg = efi_dir
+        .to_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| efi_dir.to_string_lossy().to_string());
+    run_elevated_command(
+        "bcdboot",
+        &[&sys_arg, "/s", &efi_arg, "/f", "UEFI", "/d"],
+        None,
+    )
+}
+
 pub fn bcdedit_enum_all() -> Result<CommandOutput> {
     run_elevated_command("bcdedit", &["/enum", "all", "/v"], None)
 }

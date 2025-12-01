@@ -20,6 +20,7 @@ type Props = {
   onUpdateBcd: () => void;
   onCreateDiff: () => void;
   onBoot: () => void;
+  onStartVm: () => void;
   onDeleteBcd: () => void;
   onDelete: () => void;
   isBusy: (cmd?: string) => boolean;
@@ -40,6 +41,7 @@ export function NodeDetail({
   onUpdateBcd,
   onCreateDiff,
   onBoot,
+  onStartVm,
   onDeleteBcd,
   onDelete,
   isBusy,
@@ -178,7 +180,15 @@ export function NodeDetail({
 
           <div className={sectionClass}>
             <h4 className="text-lg font-semibold text-ink-900">{t("node-actions")}</h4>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Button
+                variant="secondary"
+                onClick={onStartVm}
+                disabled={isBusy("start_vm")}
+                loading={isBusy("start_vm")}
+              >
+                {t("start-vm-button")}
+              </Button>
               <Button
                 variant="secondary"
                 onClick={onBoot}

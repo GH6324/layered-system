@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::bcd::{
     bcdedit_boot_sequence, bcdedit_delete, bcdedit_enum_all, bcdedit_set_description,
-    extract_guid_for_partition_letter, extract_guid_for_vhd, run_bcdboot,
+    extract_guid_for_partition_letter, extract_guid_for_vhd, run_bcdboot, run_bcdboot_to_efi,
 };
 use crate::db::Database;
 use crate::diskpart::{
@@ -222,11 +222,13 @@ impl WorkspaceService {
 
         let temp = TempManager::new(paths.tmp_dir())?;
         fs::create_dir_all(paths.mount_root())?;
-        let sys_letter = pick_free_letter().ok_or_else(|| {
+        let letters = pick_free_letters(2).ok_or_else(|| {
             AppError::Message("no free drive letter available between S: and Z:".into())
         })?;
+        let efi_letter = letters[0];
+        let sys_letter = letters[1];
 
-        let script = base_diskpart_script(&vhd_path, size_gb, sys_letter);
+        let script = base_diskpart_script(&vhd_path, size_gb, efi_letter, sys_letter);
         let script_path = temp.write_script("create_base.txt", &script)?;
         log_diskpart_script(&script_path);
         let create_res = run_diskpart_script(&script_path)?;
@@ -247,6 +249,13 @@ impl WorkspaceService {
         }
 
         let sys_mount = PathBuf::from(format!("{sys_letter}:"));
+        let efi_mount = PathBuf::from(format!("{efi_letter}:"));
+        let bcd_efi_res = run_bcdboot_to_efi(&sys_mount, &efi_mount)?;
+        log_command("bcdboot efi", &bcd_efi_res, None);
+        if bcd_efi_res.exit_code.unwrap_or(-1) != 0 {
+            return Err(command_error("bcdboot", &bcd_efi_res, None));
+        }
+
         let bcd_res = run_bcdboot(&sys_mount)?;
         log_command("bcdboot", &bcd_res, None);
         if bcd_res.exit_code.unwrap_or(-1) != 0 {
@@ -259,7 +268,7 @@ impl WorkspaceService {
             .or_else(|| extract_guid_for_partition_letter(&bcd_enum.stdout, sys_letter))
             .unwrap_or_default();
 
-        let detach_script = detach_vdisk_script(&vhd_path, &[sys_letter]);
+        let detach_script = detach_vdisk_script(&vhd_path, &[sys_letter, efi_letter]);
         let detach_path = temp.write_script("detach_base.txt", &detach_script)?;
         log_diskpart_script(&detach_path);
         let detach_res = run_diskpart_script(&detach_path)?;
@@ -432,6 +441,80 @@ impl WorkspaceService {
         )?;
         info!("bootsequence node={node_id} guid={guid}");
         Ok(res)
+    }
+
+    pub fn start_vm(&self, node_id: &str) -> Result<String> {
+        let db = self.db()?;
+        let node = db
+            .fetch_node(node_id)?
+            .ok_or_else(|| AppError::Message("node not found".into()))?;
+
+        let vhd_path = PathBuf::from(&node.path);
+        if !vhd_path.exists() {
+            return Err(AppError::Message(format!("vhdx not found: {}", node.path)));
+        }
+
+        let paths = self.paths()?;
+        paths.ensure_layout()?;
+        fs::create_dir_all(paths.vms_dir())?;
+
+        let vm_name = format!("ls-{}", node.id);
+        let vm_dir = paths.vms_dir().join(&vm_name);
+        fs::create_dir_all(&vm_dir)?;
+
+        let ps_script = format!(
+            r#"$ErrorActionPreference = 'Stop'
+if (-not (Get-Command -Name 'Get-VM' -ErrorAction SilentlyContinue)) {{ throw 'Hyper-V PowerShell module is not available (Get-VM not found).'; }}
+if (-not (Get-Command -Name 'vmconnect.exe' -ErrorAction SilentlyContinue)) {{ throw 'vmconnect.exe not found in PATH.'; }}
+$vmName = '{vm_name}'
+$vmPath = '{vm_path}'
+$vhdPath = '{vhd_path}'
+if (-not (Test-Path -Path $vmPath)) {{ New-Item -ItemType Directory -Path $vmPath | Out-Null }}
+$vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+if (-not $vm) {{
+    $vm = New-VM -Name $vmName -Generation 2 -MemoryStartupBytes 2GB -VHDPath $vhdPath -Path $vmPath
+}} else {{
+    $drive = Get-VMHardDiskDrive -VMName $vmName -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($drive) {{
+        Set-VMHardDiskDrive -VMHardDiskDrive $drive -Path $vhdPath | Out-Null
+    }} else {{
+        Add-VMHardDiskDrive -VMName $vmName -Path $vhdPath | Out-Null
+    }}
+}}
+if ($vm.State -ne 'Running') {{
+    Start-VM -Name $vmName | Out-Null
+}}
+Start-Process vmconnect.exe -ArgumentList 'localhost', $vmName | Out-Null
+"#,
+            vm_name = ps_escape_single(&vm_name),
+            vm_path = ps_escape_single(vm_dir.to_string_lossy().as_ref()),
+            vhd_path = ps_escape_single(vhd_path.to_string_lossy().as_ref()),
+        );
+
+        let res = run_elevated_command(
+            "powershell.exe",
+            &[
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &ps_script,
+            ],
+            None,
+        )?;
+        log_command("start_vm", &res, None);
+        if res.exit_code.unwrap_or(-1) != 0 {
+            return Err(command_error("start_vm", &res, None));
+        }
+        db.insert_op(
+            &Uuid::new_v4().to_string(),
+            Some(node_id),
+            "start_vm",
+            "ok",
+            &format!("vm_name={vm_name}"),
+        )?;
+        info!("start_vm node={node_id} vm_name={vm_name}");
+        Ok(vm_name)
     }
 
     pub fn delete_subtree(&self, node_id: &str) -> Result<()> {
@@ -738,6 +821,25 @@ fn pick_free_letter() -> Option<char> {
     None
 }
 
+fn pick_free_letters(count: usize) -> Option<Vec<char>> {
+    let mask = unsafe { GetLogicalDrives() };
+    if mask == 0 {
+        return None;
+    }
+    let mut letters = Vec::new();
+    for letter in b'S'..=b'Z' {
+        let idx = (letter - b'A') as u32;
+        let in_use = (mask & (1 << idx)) != 0;
+        if !in_use {
+            letters.push(letter as char);
+            if letters.len() == count {
+                return Some(letters);
+            }
+        }
+    }
+    None
+}
+
 /// Convert a device path (e.g. `\Device\HarddiskVolume10\foo`) to a drive path if possible.
 fn device_path_to_drive(path: &str) -> Option<String> {
     let lower = path.to_ascii_lowercase();
@@ -835,4 +937,8 @@ fn command_error(name: &str, output: &CommandOutput, script: Option<&Path>) -> A
         parts.push("no output".into());
     }
     AppError::Message(format!("{name} failed: {}", parts.join(" | ")))
+}
+
+fn ps_escape_single(input: &str) -> String {
+    input.replace('\'', "''")
 }

@@ -35,6 +35,7 @@ pub fn run() {
             commands::create_base_vhd,
             commands::create_diff_vhd,
             commands::set_bootsequence_and_reboot,
+            commands::start_vm,
             commands::delete_subtree,
             commands::delete_bcd,
             commands::repair_bcd,

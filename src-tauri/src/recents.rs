@@ -113,7 +113,8 @@ fn load(app: &AppHandle) -> Result<Vec<RecentWorkspace>> {
     let mut items: Vec<RecentWorkspace> = serde_json::from_str(&content).unwrap_or_default();
     // guard against corrupted timestamps by falling back to now
     for item in items.iter_mut() {
-        if item.last_opened_at.timestamp() == 0 && item.last_opened_at.timestamp_subsec_nanos() == 0 {
+        if item.last_opened_at.timestamp() == 0 && item.last_opened_at.timestamp_subsec_nanos() == 0
+        {
             item.last_opened_at = Utc::now();
         }
     }
@@ -163,12 +164,10 @@ fn prune(items: &mut Vec<RecentWorkspace>) {
     if items.len() <= MAX_RECENT {
         return;
     }
-    items.sort_by(|a, b| {
-        match (a.pinned, b.pinned) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => b.last_opened_at.cmp(&a.last_opened_at),
-        }
+    items.sort_by(|a, b| match (a.pinned, b.pinned) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => b.last_opened_at.cmp(&a.last_opened_at),
     });
     while items.len() > MAX_RECENT {
         if let Some(idx) = items
@@ -185,11 +184,9 @@ fn prune(items: &mut Vec<RecentWorkspace>) {
 }
 
 fn sort_items(items: &mut Vec<RecentWorkspace>) {
-    items.sort_by(|a, b| {
-        match (a.pinned, b.pinned) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => b.last_opened_at.cmp(&a.last_opened_at),
-        }
+    items.sort_by(|a, b| match (a.pinned, b.pinned) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => b.last_opened_at.cmp(&a.last_opened_at),
     });
 }

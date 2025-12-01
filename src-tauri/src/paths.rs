@@ -45,6 +45,10 @@ impl AppPaths {
         self.meta_dir().join("mnt")
     }
 
+    pub fn vms_dir(&self) -> PathBuf {
+        self.root.join("vms")
+    }
+
     pub fn state_db_path(&self) -> PathBuf {
         self.meta_dir().join("state.db")
     }
@@ -63,6 +67,7 @@ impl AppPaths {
             self.tmp_dir().as_path(),
             self.locales_dir().as_path(),
             self.mount_root().as_path(),
+            self.vms_dir().as_path(),
         ] {
             fs::create_dir_all(dir)?;
         }

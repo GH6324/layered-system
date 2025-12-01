@@ -54,18 +54,16 @@ pub async fn init_root(
     let state = state.inner().clone();
     run_blocking_cmd(move || {
         let root_for_log = root_path.clone();
-        let settings = state
-            .initialize(root_path.clone(), locale)
-            .map_err(|e| {
-                let _ = recents::touch(
-                    &app,
-                    root_for_log.clone(),
-                    RecentStatus::InitFailed,
-                    None,
-                    None,
-                );
-                e.to_string()
-            })?;
+        let settings = state.initialize(root_path.clone(), locale).map_err(|e| {
+            let _ = recents::touch(
+                &app,
+                root_for_log.clone(),
+                RecentStatus::InitFailed,
+                None,
+                None,
+            );
+            e.to_string()
+        })?;
         let _ = recents::touch(
             &app,
             root_for_log,
@@ -194,6 +192,25 @@ pub async fn set_bootsequence_and_reboot(
         svc.set_bootsequence_and_reboot(&node_id)
             .map(|_| ())
             .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+#[derive(Serialize)]
+pub struct StartVmResponse {
+    pub vm_name: String,
+}
+
+#[tauri::command]
+pub async fn start_vm(
+    node_id: String,
+    state: State<'_, SharedState>,
+) -> CmdResult<StartVmResponse> {
+    let state = state.inner().clone();
+    run_blocking_cmd(move || {
+        let svc = WorkspaceService::new(state);
+        let vm_name = svc.start_vm(&node_id).map_err(|e| e.to_string())?;
+        Ok(StartVmResponse { vm_name })
     })
     .await
 }

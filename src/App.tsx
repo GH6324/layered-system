@@ -268,6 +268,17 @@ function App() {
     }
   }, [selectedNode, runCommand, t]);
 
+  const handleStartVm = useCallback(async () => {
+    if (!selectedNode) return;
+    try {
+      const res = await runCommand<{ vm_name: string }>("start_vm", { nodeId: selectedNode });
+      const label = res?.vm_name || selectedDetail?.name || selectedNode;
+      setMessage(t("message-vm-started", { name: label }));
+    } catch {
+      // handled in runCommand
+    }
+  }, [selectedNode, selectedDetail?.name, runCommand, t]);
+
   const handleDelete = useCallback(async () => {
     if (!selectedNode) return;
     try {
@@ -487,6 +498,7 @@ function App() {
                 onUpdateBcd={handleUpdateBcdDesc}
                 onCreateDiff={handleCreateDiff}
                 onBoot={handleBootReboot}
+                onStartVm={handleStartVm}
                 onDeleteBcd={handleDeleteBcd}
                 onDelete={handleDelete}
                 isBusy={isBusy}
