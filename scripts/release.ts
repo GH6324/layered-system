@@ -144,13 +144,14 @@ async function main() {
   runGit(`commit -m "${commitMessage}"`);
   runGit(`tag v${newVersion}`);
 
-  console.log(
-    `Created commit and tag v${newVersion}. Remember to run 'git push' and 'git push --tags'.`,
-  );
+  // Push current branch and tags so that GitHub Actions can pick up the new tag.
+  runGit("push");
+  runGit("push --tags");
+
+  console.log(`Created and pushed tag v${newVersion}.`);
 }
 
 main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
